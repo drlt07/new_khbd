@@ -26,3 +26,16 @@ export function initials(name: string) {
   const first = parts.length > 1 ? parts[0] : "";
   return ((first[0] ?? "") + (last[0] ?? "")).toUpperCase() || "?";
 }
+
+/** Năm học hiện tại (năm học VN bắt đầu khoảng tháng 8–9). */
+export function currentSchoolYear(now = new Date()) {
+  const y = now.getFullYear();
+  return now.getMonth() >= 7 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+}
+
+/** Date -> "YYYY-MM-DD" cho input type=date */
+export function toDateInput(value: Date | string | null | undefined) {
+  if (!value) return "";
+  const d = typeof value === "string" ? new Date(value) : value;
+  return d.toISOString().slice(0, 10);
+}

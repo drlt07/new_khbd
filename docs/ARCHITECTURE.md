@@ -67,10 +67,10 @@ src/
 | `/login`, `/register` | Tài khoản | 1 ✅ |
 | `/dashboard` | Dashboard | 1 ✅ |
 | `/settings` | Cài đặt (tài khoản, trạng thái AI) | 1 ✅ (cơ bản) |
-| `/classes`, `/classes/[id]` | Quản lý lớp học | 2 |
-| `/students`, `/students/import` | Quản lý học sinh, import Excel | 2 |
-| `/profiles/[studentId]` | Hồ sơ học sinh (9 tab) | 2 (khung) → 4 (AI) |
-| `/frameworks` | Thiết lập khung thông tin A–F | 2 |
+| `/classes`, `/classes/[id]` | Quản lý lớp học | 2 ✅ |
+| `/students` (+ dialog import) | Quản lý học sinh, import Excel | 2 ✅ |
+| `/profiles`, `/profiles/[studentId]` | Hồ sơ học sinh (9 tab) | 2 ✅ → 4 (AI) |
+| `/frameworks`, `/frameworks/[id]` | Thiết lập khung thông tin A–F | 2 ✅ |
 | `/data-intake` | Tiếp nhận dữ liệu (upload + nhập văn bản) | 3 |
 | `/evidence` | Quản lý minh chứng | 3 |
 | `/analysis`, `/analysis/[studentId]` | Phân tích AI & xác nhận | 4 |
@@ -99,16 +99,21 @@ Quy tắc dữ liệu: chỉ mục có `reviewStatus ∈ {CONFIRMED, EDITED}` đ
 
 | Method | Endpoint | Mô tả | Sprint |
 |---|---|---|---|
+| GET | `/api/students?q&classId&status` · GET/PATCH/DELETE `/api/students/:id` | Danh sách / hồ sơ / sửa / xóa học sinh | 2 ✅ |
+| GET | `/api/students/import-template` · `/api/subjects` | Tệp mẫu Excel, môn học | 2 ✅ |
+| POST | `/api/students/:id/profile-items` · PATCH/DELETE `/api/profile-items/:dimension/:id` | Mục hồ sơ do giáo viên nhập | 2 ✅ |
+| PATCH | `/api/students/:id/profile` | Tóm tắt, nhận xét chung, trạng thái hồ sơ | 2 ✅ |
+| POST | `/api/students/:id/academic-results` · DELETE `/api/academic-results/:id` | Kết quả học tập (tham khảo) | 2 ✅ |
 | POST | `/api/auth/register` · `/login` · `/logout` | Xác thực | 1 ✅ |
 | GET | `/api/auth/me` | Phiên hiện tại | 1 ✅ |
 | GET | `/api/dashboard/stats` | Số liệu dashboard | 1 ✅ |
 | GET | `/api/health` | DB + chế độ AI | 1 ✅ |
-| GET/POST | `/api/classes` · GET/PATCH/DELETE `/api/classes/:id` | CRUD lớp | 2 |
-| GET/POST | `/api/classes/:id/students` · PATCH/DELETE `/api/students/:id` | CRUD học sinh | 2 |
-| POST | `/api/classes/:id/students/import` | Import Excel/CSV (preview → commit) | 2 |
-| GET/POST/PATCH | `/api/frameworks`, `/api/frameworks/:id/criteria` | Khung & tiêu chí | 2 |
+| GET/POST | `/api/classes` · GET/PATCH/DELETE `/api/classes/:id` | CRUD lớp || 2 ✅ |
+| GET/POST | `/api/classes/:id/students` · PATCH/DELETE `/api/students/:id` | CRUD học sinh || 2 ✅ |
+| POST | `/api/classes/:id/students/import` | Import Excel/CSV (preview → commit) || 2 ✅ |
+| GET/POST/PATCH | `/api/frameworks`, `/api/frameworks/:id/criteria` | Khung & tiêu chí || 2 ✅ |
 | POST | `/api/evidence` (multipart) · GET `/api/evidence?classId&studentId` · GET `/api/evidence/:id/file` | Minh chứng | 3 |
-| POST | `/api/students/:id/observations` | Nhận xét quan sát | 3 |
+| POST | `/api/students/:id/observations` · DELETE `/api/observations/:id` | Nhận xét quan sát | 2 ✅ |
 | POST | `/api/students/:id/analyze` | Chạy phân tích AI | 4 |
 | POST | `/api/recommendations/:id/decision` | Đồng ý/sửa/từ chối/phân tích lại | 4 |
 | GET | `/api/students/:id/profile` | Hồ sơ tổng hợp | 4 |

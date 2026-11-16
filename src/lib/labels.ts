@@ -47,3 +47,25 @@ export const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
   REJECTED: "Đã từ chối",
   NEEDS_DATA: "Chưa đủ căn cứ",
 };
+
+export const ORIGIN_LABEL = { TEACHER: "Giáo viên nhập", AI: "AI đề xuất", IMPORT: "Nhập từ tệp" } as const;
+export const CONFIDENCE_LABEL = { LOW: "Tin cậy thấp", MEDIUM: "Tin cậy trung bình", HIGH: "Tin cậy cao" } as const;
+
+export const EVIDENCE_TYPE_LABEL = {
+  SCORE_SHEET: "Bảng điểm", TEST: "Bài kiểm tra", ASSIGNMENT: "Bài tập", PRODUCT: "Sản phẩm học tập",
+  IMAGE: "Hình ảnh", ASSESSMENT_DOC: "Tài liệu đánh giá", OBSERVATION_NOTE: "Ghi chép quan sát", OTHER: "Khác",
+} as const;
+
+/** Nhãn lịch sử cập nhật hồ sơ */
+export const AUDIT_ACTION_LABEL: Record<string, string> = {
+  "student.create": "Tạo học sinh",
+  "student.update": "Cập nhật thông tin học sinh",
+  "profile.update": "Cập nhật hồ sơ",
+  "profile.item.create": "Thêm mục hồ sơ",
+  "profile.item.update": "Sửa mục hồ sơ",
+  "profile.item.delete": "Xóa mục hồ sơ",
+  "observation.create": "Thêm nhận xét",
+  "observation.delete": "Xóa nhận xét",
+  "academic-result.create": "Thêm kết quả học tập",
+  "academic-result.delete": "Xóa kết quả học tập",
+};

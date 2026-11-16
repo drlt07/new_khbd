@@ -28,18 +28,18 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Lớp học",
     items: [
-      { href: "/classes", label: "Lớp học", icon: Library, plannedSprint: 2, description: "Tạo lớp, khai báo năm học, môn học; quản lý danh sách lớp." },
-      { href: "/students", label: "Học sinh", icon: Users, plannedSprint: 2, description: "Thêm học sinh, nhập danh sách từ Excel, tìm kiếm và lọc." },
+      { href: "/classes", label: "Lớp học", icon: Library, description: "Tạo lớp, khai báo năm học, môn học; quản lý danh sách lớp." },
+      { href: "/students", label: "Học sinh", icon: Users, description: "Thêm học sinh, nhập danh sách từ Excel, tìm kiếm và lọc." },
     ],
   },
   {
     label: "Hồ sơ học sinh",
     items: [
-      { href: "/frameworks", label: "Khung thông tin", icon: ClipboardList, plannedSprint: 2, description: "Thiết lập phương diện A–F và tiêu chí theo dõi, tùy chỉnh theo môn học." },
+      { href: "/frameworks", label: "Khung thông tin", icon: ClipboardList, description: "Thiết lập phương diện A–F và tiêu chí theo dõi, tùy chỉnh theo môn học." },
       { href: "/data-intake", label: "Tiếp nhận dữ liệu", icon: Upload, plannedSprint: 3, description: "Nhập nhận xét, tải bảng điểm, bài kiểm tra, sản phẩm, ảnh minh chứng." },
       { href: "/evidence", label: "Minh chứng", icon: FolderOpen, plannedSprint: 3, description: "Xem trước, phân loại, gắn minh chứng với học sinh, môn học, tiêu chí." },
       { href: "/analysis", label: "Phân tích AI", icon: BrainCircuit, plannedSprint: 4, description: "AI phân tích dữ liệu; giáo viên đồng ý, chỉnh sửa, từ chối hoặc yêu cầu phân tích lại." },
-      { href: "/profiles", label: "Hồ sơ học sinh", icon: UserRound, plannedSprint: 2, description: "Hồ sơ đa phương diện, có minh chứng và lịch sử cập nhật." },
+      { href: "/profiles", label: "Hồ sơ học sinh", icon: UserRound, description: "Hồ sơ đa phương diện, có minh chứng và lịch sử cập nhật." },
     ],
   },
   {
