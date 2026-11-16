@@ -1,0 +1,810 @@
+// AI Personalized Lesson Planner — Database schema
+// Nguyên tắc thiết kế:
+//  - KHÔNG có trường xếp loại học lực (studentLevel) để phân nhóm.
+//  - Kết quả học tập lưu riêng (AcademicResult), chỉ là dữ liệu tham khảo.
+//  - Mọi nhận định trong hồ sơ có nguồn gốc (origin), trạng thái duyệt (reviewStatus),
+//    mức tin cậy và liên kết minh chứng.
+//  - Nhóm hoạt động gắn với LessonPlan / LessonActivity, không gắn cứng vào học sinh.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum UserRole {
+  ADMIN
+  SCHOOL_MANAGER
+  TEACHER
+}
+
+/// Trạng thái hồ sơ học sinh (theo UI/UX 7.4)
+enum ProfileStatus {
+  NOT_ANALYZED
+  ANALYZING
+  PENDING_REVIEW
+  CONFIRMED
+  NEEDS_MORE_DATA
+}
+
+/// Các phương diện của khung thông tin (A–F)
+enum ProfileDimension {
+  INTEREST            // A. Sở thích và hứng thú
+  STRENGTH            // B. Thế mạnh và năng khiếu
+  COMPETENCY          // C. Năng lực học tập
+  LEARNING_NEED       // D. Khó khăn và nhu cầu hỗ trợ
+  LEARNING_PREFERENCE // E. Cách thức học tập phù hợp
+  DEVELOPMENT_GOAL    // F. Định hướng phát triển
+}
+
+/// Nguồn gốc của một nhận định / dữ liệu
+enum ItemOrigin {
+  TEACHER
+  AI
+  IMPORT
+}
+
+/// Trạng thái duyệt của một nhận định
+enum ReviewStatus {
+  PENDING    // AI đề xuất, chờ giáo viên xác nhận
+  CONFIRMED  // Giáo viên đã xác nhận -> được dùng cho KHBD
+  EDITED     // Giáo viên đã chỉnh sửa và xác nhận
+  REJECTED   // Giáo viên từ chối
+  NEEDS_DATA // Chưa đủ căn cứ
+}
+
+enum ConfidenceLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum DataSource {
+  MANUAL_ENTRY
+  FREE_TEXT_NOTE
+  FILE_UPLOAD
+  EXCEL_IMPORT
+  OBSERVATION
+}
+
+enum EvidenceType {
+  SCORE_SHEET
+  TEST
+  ASSIGNMENT
+  PRODUCT
+  IMAGE
+  ASSESSMENT_DOC
+  OBSERVATION_NOTE
+  OTHER
+}
+
+enum ProcessingStatus {
+  UPLOADED
+  EXTRACTING
+  EXTRACTED
+  FAILED
+}
+
+enum LessonPlanStatus {
+  DRAFT
+  GENERATED
+  CONFIRMED
+  ARCHIVED
+}
+
+enum ActivityPhase {
+  OPENING     // Hoạt động mở đầu
+  KNOWLEDGE   // Hoạt động hình thành kiến thức
+  PRACTICE    // Hoạt động luyện tập
+  APPLICATION // Hoạt động vận dụng
+}
+
+enum GuidanceLevel {
+  INDEPENDENT
+  PARTIAL_GUIDANCE
+  STEP_BY_STEP
+}
+
+enum AITaskType {
+  DOCUMENT_EXTRACTION
+  STUDENT_PROFILE_ANALYSIS
+  EVIDENCE_MAPPING
+  LEARNING_NEEDS_ANALYSIS
+  LESSON_ANALYSIS
+  ACTIVITY_RECOMMENDATION
+  FLEXIBLE_GROUPING
+  DIFFERENTIATED_TASK_GENERATION
+  LESSON_PLAN_GENERATION
+  LESSON_PLAN_REVISION
+}
+
+enum AIJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ApprovalDecision {
+  APPROVED
+  EDITED
+  REJECTED
+  REANALYZE_REQUESTED
+}
+
+// ───────────────────────── Tài khoản & tổ chức ─────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  fullName     String
+  role         UserRole  @default(TEACHER)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  teacher   Teacher?
+  auditLogs AuditLog[]
+}
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  isSample  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teachers Teacher[]
+  classes  Class[]
+  subjects Subject[]
+}
+
+model Teacher {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  schoolId       String?
+  phone          String?
+  specialization String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  school School? @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+
+  classes       Class[]
+  classSubjects ClassSubject[]
+  frameworks    AssessmentFramework[]
+  observations  StudentObservation[]
+  evidences     StudentEvidence[]
+  lessonPlans   LessonPlan[]
+  approvals     TeacherApproval[]
+  versions      LessonPlanVersion[]
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  schoolId  String?
+  name      String
+  code      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school          School?               @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  classSubjects   ClassSubject[]
+  frameworks      AssessmentFramework[]
+  evidences       StudentEvidence[]
+  observations    StudentObservation[]
+  academicResults AcademicResult[]
+  competencies    CompetencyAssessment[]
+  lessonPlans     LessonPlan[]
+
+  @@unique([schoolId, name])
+}
+
+model Class {
+  id          String   @id @default(cuid())
+  schoolId    String?
+  ownerId     String // giáo viên tạo / chủ nhiệm lớp
+  name        String
+  schoolYear  String // ví dụ "2026-2027"
+  gradeLevel  Int?
+  description String?
+  isArchived  Boolean  @default(false)
+  isSample    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school      School?           @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  owner       Teacher           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  subjects    ClassSubject[]
+  students    Student[]
+  evidences   StudentEvidence[]
+  lessonPlans LessonPlan[]
+
+  @@unique([ownerId, name, schoolYear])
+  @@index([ownerId])
+}
+
+model ClassSubject {
+  id        String   @id @default(cuid())
+  classId   String
+  subjectId String
+  teacherId String?
+  createdAt DateTime @default(now())
+
+  class   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+
+  @@unique([classId, subjectId])
+}
+
+// ───────────────────────────── Học sinh ─────────────────────────────
+
+model Student {
+  id            String        @id @default(cuid())
+  classId       String
+  studentCode   String?
+  fullName      String
+  dateOfBirth   DateTime?
+  gender        String?
+  notes         String?
+  profileStatus ProfileStatus @default(NOT_ANALYZED)
+  isSample      Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  profile            StudentCompetencyProfile?
+  evidenceLinks      EvidenceStudentLink[]
+  observations       StudentObservation[]
+  interests          StudentInterest[]
+  strengths          StudentStrength[]
+  learningNeeds      StudentLearningNeed[]
+  preferences        StudentLearningPreference[]
+  developmentGoals   StudentDevelopmentGoal[]
+  competencies       CompetencyAssessment[]
+  academicResults    AcademicResult[]
+  groupMemberships   LearningGroupMember[]
+  differentiatedTask DifferentiatedTask[]
+  aiAnalyses         AIAnalysis[]
+  aiRecommendations  AIRecommendation[]
+
+  @@unique([classId, studentCode])
+  @@index([classId])
+}
+
+// ───────────────────────── Khung đánh giá ─────────────────────────
+
+model AssessmentFramework {
+  id          String   @id @default(cuid())
+  ownerId     String
+  subjectId   String?
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner    Teacher              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  subject  Subject?             @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  criteria AssessmentCriteria[]
+}
+
+model AssessmentCriteria {
+  id          String           @id @default(cuid())
+  frameworkId String
+  dimension   ProfileDimension
+  name        String
+  description String?
+  sortOrder   Int              @default(0)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  framework    AssessmentFramework         @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  evidences    StudentEvidence[]
+  interests    StudentInterest[]
+  strengths    StudentStrength[]
+  needs        StudentLearningNeed[]
+  preferences  StudentLearningPreference[]
+  goals        StudentDevelopmentGoal[]
+  competencies CompetencyAssessment[]
+
+  @@index([frameworkId, dimension])
+}
+
+// ───────────────────────── Dữ liệu & minh chứng ─────────────────────────
+
+model StudentEvidence {
+  id               String           @id @default(cuid())
+  classId          String
+  subjectId        String?
+  uploadedById     String
+  type             EvidenceType
+  source           DataSource
+  title            String
+  description      String?
+  fileName         String?
+  mimeType         String?
+  sizeBytes        Int?
+  storageKey       String? // đường dẫn trong local storage / object storage
+  textContent      String? // văn bản nhập tự do hoặc nội dung đã trích xuất
+  extractedData    Json?
+  processingStatus ProcessingStatus @default(UPLOADED)
+  processingError  String?
+  collectedAt      DateTime         @default(now()) // thời điểm thu thập minh chứng
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  class      Class                 @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject    Subject?              @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  uploadedBy Teacher               @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  students   EvidenceStudentLink[]
+  criteria   AssessmentCriteria[]
+
+  interests       StudentInterest[]
+  strengths       StudentStrength[]
+  needs           StudentLearningNeed[]
+  preferences     StudentLearningPreference[]
+  goals           StudentDevelopmentGoal[]
+  competencies    CompetencyAssessment[]
+  academicResults AcademicResult[]
+
+  @@index([classId])
+}
+
+/// Một minh chứng có thể liên quan tới nhiều học sinh (ví dụ bảng điểm cả lớp)
+model EvidenceStudentLink {
+  evidenceId String
+  studentId  String
+  createdAt  DateTime @default(now())
+
+  evidence StudentEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  student  Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([evidenceId, studentId])
+}
+
+model StudentObservation {
+  id         String   @id @default(cuid())
+  studentId  String
+  teacherId  String
+  subjectId  String?
+  content    String
+  context    String?
+  observedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  student Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([studentId])
+}
+
+model AcademicResult {
+  id              String   @id @default(cuid())
+  studentId       String
+  subjectId       String
+  evidenceId      String?
+  assessmentName  String // ví dụ "Kiểm tra giữa kỳ I"
+  term            String?
+  score           Float?
+  maxScore        Float?
+  requirementRef  String? // yêu cầu cần đạt liên quan
+  comment         String?
+  recordedAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  student  Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject  Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  evidence StudentEvidence? @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, subjectId])
+}
+
+// ─────────────── Hồ sơ đặc điểm cá nhân (Cấp độ 1) ───────────────
+// Mỗi mục có: origin, reviewStatus, confidence, liên kết minh chứng, khuyến nghị AI gốc.
+
+model StudentInterest {
+  id               String           @id @default(cuid())
+  studentId        String
+  criteriaId       String?
+  recommendationId String?
+  title            String
+  description      String?
+  origin           ItemOrigin       @default(TEACHER)
+  reviewStatus     ReviewStatus     @default(CONFIRMED)
+  confidence       ConfidenceLevel?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  student        Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  criteria       AssessmentCriteria? @relation(fields: [criteriaId], references: [id], onDelete: SetNull)
+  recommendation AIRecommendation?   @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  evidences      StudentEvidence[]
+
+  @@index([studentId])
+}
+
+model StudentStrength {
+  id               String           @id @default(cuid())
+  studentId        String
+  criteriaId       String?
+  recommendationId String?
+  title            String
+  description      String?
+  origin           ItemOrigin       @default(TEACHER)
+  reviewStatus     ReviewStatus     @default(CONFIRMED)
+  confidence       ConfidenceLevel?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  student        Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  criteria       AssessmentCriteria? @relation(fields: [criteriaId], references: [id], onDelete: SetNull)
+  recommendation AIRecommendation?   @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  evidences      StudentEvidence[]
+
+  @@index([studentId])
+}
+
+model StudentLearningNeed {
+  id               String           @id @default(cuid())
+  studentId        String
+  criteriaId       String?
+  recommendationId String?
+  title            String
+  description      String?
+  supportStrategy  String? // hình thức hỗ trợ gợi ý
+  origin           ItemOrigin       @default(TEACHER)
+  reviewStatus     ReviewStatus     @default(CONFIRMED)
+  confidence       ConfidenceLevel?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  student        Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  criteria       AssessmentCriteria? @relation(fields: [criteriaId], references: [id], onDelete: SetNull)
+  recommendation AIRecommendation?   @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  evidences      StudentEvidence[]
+
+  @@index([studentId])
+}
+
+model StudentLearningPreference {
+  id               String           @id @default(cuid())
+  studentId        String
+  criteriaId       String?
+  recommendationId String?
+  title            String
+  description      String?
+  origin           ItemOrigin       @default(TEACHER)
+  reviewStatus     ReviewStatus     @default(CONFIRMED)
+  confidence       ConfidenceLevel?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  student        Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  criteria       AssessmentCriteria? @relation(fields: [criteriaId], references: [id], onDelete: SetNull)
+  recommendation AIRecommendation?   @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  evidences      StudentEvidence[]
+
+  @@index([studentId])
+}
+
+model StudentDevelopmentGoal {
+  id               String           @id @default(cuid())
+  studentId        String
+  criteriaId       String?
+  recommendationId String?
+  title            String
+  description      String?
+  origin           ItemOrigin       @default(TEACHER)
+  reviewStatus     ReviewStatus     @default(CONFIRMED)
+  confidence       ConfidenceLevel?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  student        Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  criteria       AssessmentCriteria? @relation(fields: [criteriaId], references: [id], onDelete: SetNull)
+  recommendation AIRecommendation?   @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  evidences      StudentEvidence[]
+
+  @@index([studentId])
+}
+
+/// Năng lực thể hiện qua minh chứng — mô tả định tính, KHÔNG phải nhãn xếp loại.
+model CompetencyAssessment {
+  id               String           @id @default(cuid())
+  studentId        String
+  criteriaId       String?
+  subjectId        String?
+  recommendationId String?
+  competencyName   String
+  observation      String // biểu hiện cụ thể quan sát được
+  origin           ItemOrigin       @default(TEACHER)
+  reviewStatus     ReviewStatus     @default(CONFIRMED)
+  confidence       ConfidenceLevel?
+  assessedAt       DateTime         @default(now())
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  student        Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  criteria       AssessmentCriteria? @relation(fields: [criteriaId], references: [id], onDelete: SetNull)
+  subject        Subject?            @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  recommendation AIRecommendation?   @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  evidences      StudentEvidence[]
+
+  @@index([studentId])
+}
+
+/// Thông tin tổng hợp của hồ sơ (tóm tắt, phiên bản, lần phân tích gần nhất)
+model StudentCompetencyProfile {
+  id             String    @id @default(cuid())
+  studentId      String    @unique
+  summary        String?
+  teacherComment String?
+  version        Int       @default(1)
+  lastAnalyzedAt DateTime?
+  lastReviewedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────── Kế hoạch bài dạy ───────────────────────
+
+model LessonPlan {
+  id              String           @id @default(cuid())
+  teacherId       String
+  classId         String
+  subjectId       String
+  topic           String?
+  title           String
+  durationMinutes Int?
+  objectives      Json? // { knowledge, competencies, qualities }
+  requirements    String? // yêu cầu cần đạt
+  knowledgeContent String?
+  plannedMethods  String?
+  references      String?
+  templateFileKey String? // mẫu KHBD của nhà trường
+  lessonAnalysis  Json? // kết quả AI phân tích bài học
+  content         Json? // nội dung KHBD có cấu trúc (I–V)
+  status          LessonPlanStatus @default(DRAFT)
+  wizardStep      Int              @default(1)
+  currentVersion  Int              @default(0)
+  isSample        Boolean          @default(false)
+  confirmedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  teacher    Teacher             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  class      Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject    Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  activities LessonActivity[]
+  groups     LearningGroup[]
+  materials  LearningMaterial[]
+  versions   LessonPlanVersion[]
+  aiAnalyses AIAnalysis[]
+  aiRecommendations AIRecommendation[]
+
+  @@index([teacherId])
+  @@index([classId])
+}
+
+model LessonActivity {
+  id              String        @id @default(cuid())
+  lessonPlanId    String
+  phase           ActivityPhase
+  sortOrder       Int           @default(0)
+  title           String
+  objective       String?
+  content         String?
+  product         String?
+  organization    String? // tổ chức thực hiện
+  differentiation String? // phương án cá thể hóa
+  support         String? // hình thức hỗ trợ
+  assessment      String? // phương án đánh giá
+  durationMinutes Int?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  lessonPlan LessonPlan           @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  groups     LearningGroup[]
+  tasks      DifferentiatedTask[]
+
+  @@index([lessonPlanId])
+}
+
+/// Nhóm hoạt động (Cấp độ 2) — luôn gắn với một KHBD / hoạt động cụ thể.
+model LearningGroup {
+  id           String       @id @default(cuid())
+  lessonPlanId String
+  activityId   String?
+  name         String
+  goal         String?
+  rationale    String? // lý do đề xuất
+  product      String?
+  support      String?
+  origin       ItemOrigin   @default(TEACHER)
+  reviewStatus ReviewStatus @default(CONFIRMED)
+  sortOrder    Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  lessonPlan LessonPlan            @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  activity   LessonActivity?       @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  members    LearningGroupMember[]
+  tasks      DifferentiatedTask[]
+
+  @@index([lessonPlanId])
+}
+
+model LearningGroupMember {
+  id             String   @id @default(cuid())
+  groupId        String
+  studentId      String
+  role           String?
+  rationale      String? // căn cứ từ hồ sơ / minh chứng
+  isNewChallenge Boolean  @default(false) // cơ hội thử sức lĩnh vực mới
+  insufficientData Boolean @default(false) // chưa đủ căn cứ
+  createdAt      DateTime @default(now())
+
+  group   LearningGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, studentId])
+}
+
+model DifferentiatedTask {
+  id                 String        @id @default(cuid())
+  activityId         String?
+  groupId            String?
+  studentId          String?
+  title              String
+  description        String
+  product            String?
+  guidanceLevel      GuidanceLevel @default(PARTIAL_GUIDANCE)
+  complexityNote     String?
+  assessmentCriteria String?
+  origin             ItemOrigin    @default(TEACHER)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  activity  LessonActivity?    @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  group     LearningGroup?     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student   Student?           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  materials LearningMaterial[]
+}
+
+model LearningMaterial {
+  id           String   @id @default(cuid())
+  lessonPlanId String?
+  title        String
+  type         String? // phiếu học tập, video, slide...
+  url          String?
+  storageKey   String?
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  lessonPlan LessonPlan?          @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  tasks      DifferentiatedTask[]
+}
+
+model LessonPlanVersion {
+  id            String   @id @default(cuid())
+  lessonPlanId  String
+  versionNumber Int
+  snapshot      Json
+  note          String?
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  lessonPlan LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  createdBy  Teacher    @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([lessonPlanId, versionNumber])
+}
+
+// ─────────────────────────── AI & phê duyệt ───────────────────────────
+
+model AIAnalysis {
+  id            String      @id @default(cuid())
+  taskType      AITaskType
+  status        AIJobStatus @default(PENDING)
+  studentId     String?
+  lessonPlanId  String?
+  requestedById String
+  provider      String // "mock" | "openai" | ...
+  model         String?
+  isMock        Boolean     @default(false)
+  promptVersion String?
+  input         Json? // đầu vào đã ẩn danh hóa
+  output        Json?
+  error         String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  student         Student?           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonPlan      LessonPlan?        @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  recommendations AIRecommendation[]
+
+  @@index([studentId])
+  @@index([lessonPlanId])
+}
+
+model AIRecommendation {
+  id           String            @id @default(cuid())
+  analysisId   String
+  studentId    String?
+  lessonPlanId String?
+  dimension    ProfileDimension?
+  kind         String // "profile_item" | "group" | "task" | "missing_info" ...
+  statement    String // nhận định của AI
+  rationale    String? // lập luận
+  evidenceRefs Json? // [{ evidenceId, excerpt }]
+  confidence   ConfidenceLevel   @default(LOW)
+  missingInfo  String? // thông tin chưa đủ căn cứ
+  payload      Json?
+  reviewStatus ReviewStatus      @default(PENDING)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  analysis   AIAnalysis        @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  student    Student?          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonPlan LessonPlan?       @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  approvals  TeacherApproval[]
+
+  interests    StudentInterest[]
+  strengths    StudentStrength[]
+  needs        StudentLearningNeed[]
+  preferences  StudentLearningPreference[]
+  goals        StudentDevelopmentGoal[]
+  competencies CompetencyAssessment[]
+
+  @@index([studentId, reviewStatus])
+}
+
+model TeacherApproval {
+  id               String           @id @default(cuid())
+  recommendationId String
+  teacherId        String
+  decision         ApprovalDecision
+  editedContent    String?
+  comment          String?
+  createdAt        DateTime         @default(now())
+
+  recommendation AIRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  teacher        Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String // "auth.login", "class.create", "student.update"...
+  entityType String?
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+}
