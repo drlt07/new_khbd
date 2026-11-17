@@ -35,3 +35,20 @@ export async function deleteClass(userId: string, id: string) {
   await assertClassOwner(userId, id);
   await prisma.class.delete({ where: { id } });
 }
+
+/** Tiến độ 2 pha của một lớp — dùng cho tab Tổng quan và thanh tab */
+export async function getClassProgress(userId: string, classId: string) {
+  const cls = await prisma.class.findFirst({ where: { id: classId, ownerId: userId } });
+  if (!cls) return null;
+  const [students, withTraits, sheets, groupings, lessons, latestGrouping, latestLesson] = await Promise.all([
+    prisma.student.count({ where: { classId } }),
+    prisma.student.count({ where: { classId, traits: { some: {} } } }),
+    prisma.scoreSheet.count({ where: { classId } }),
+    prisma.grouping.count({ where: { classId } }),
+    prisma.lessonPlan.count({ where: { grouping: { classId } } }),
+    prisma.grouping.findFirst({ where: { classId }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true, _count: { select: { groups: true } } } }),
+    prisma.lessonPlan.findFirst({ where: { grouping: { classId } }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true } }),
+  ]);
+  return { cls, students, withTraits, sheets, groupings, lessons, latestGrouping, latestLesson };
+}
+export type ClassProgress = NonNullable<Awaited<ReturnType<typeof getClassProgress>>>;

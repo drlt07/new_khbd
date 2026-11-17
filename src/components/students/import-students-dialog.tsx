@@ -29,7 +29,7 @@ export function ImportStudentsDialog({
   const [classId, setClassId] = useState(defaultClassId ?? classes[0]?.id ?? "");
   const [fileName, setFileName] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [result, setResult] = useState<{ created: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{ created: number; updated: number; skipped: number } | null>(null);
   const { mutate, pending, error, reset } = useMutation();
 
   function close(o: boolean) {
@@ -49,7 +49,7 @@ export function ImportStudentsDialog({
   async function commit() {
     if (!preview) return;
     const rows = preview.rows.flatMap((r) => (r.data ? [r.data] : []));
-    const res = await mutate<{ created: number; skipped: number }>(`/api/classes/${classId}/students/import`, "POST", { rows });
+    const res = await mutate<{ created: number; updated: number; skipped: number }>(`/api/classes/${classId}/students/import`, "POST", { rows });
     if (res.ok) setResult(res.data);
   }
 
@@ -59,8 +59,8 @@ export function ImportStudentsDialog({
         {result ? (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
             <CheckCircle2 className="size-10 text-success" />
-            <p className="font-medium">Đã thêm {result.created} học sinh</p>
-            {result.skipped > 0 && <p className="text-sm text-muted-foreground">{result.skipped} dòng bị bỏ qua do trùng mã học sinh.</p>}
+            <p className="font-medium">Đã thêm {result.created} học sinh{result.updated ? `, cập nhật đặc trưng ${result.updated} học sinh` : ""}</p>
+            {result.skipped > 0 && <p className="text-sm text-muted-foreground">{result.skipped} dòng bị bỏ qua do trùng lặp trong tệp.</p>}
             <Button onClick={() => close(false)}>Đóng</Button>
           </div>
         ) : (

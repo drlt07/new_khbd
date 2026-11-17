@@ -1,5 +1,6 @@
 import "server-only";
 import ExcelJS from "exceljs";
+import { readTable } from "@/server/excel/read-table";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
 import { GENDERS, importRowSchema, type ImportRow } from "@/schemas/student";
@@ -34,17 +35,6 @@ export type PreviewRow = {
   warnings: string[];
 };
 
-function cellToString(v: ExcelJS.CellValue): string {
-  if (v == null) return "";
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  if (typeof v === "object") {
-    if ("text" in v && typeof v.text === "string") return v.text;
-    if ("result" in v) return cellToString(v.result as ExcelJS.CellValue);
-    if ("richText" in v) return v.richText.map((r) => r.text).join("");
-  }
-  return String(v).trim();
-}
-
 function parseGender(value: string): { gender: ImportRow["gender"]; warning?: string } {
   if (!value) return { gender: null };
   const n = normalize(value);
@@ -52,52 +42,6 @@ function parseGender(value: string): { gender: ImportRow["gender"]; warning?: st
   if (["nu", "f", "female"].includes(n)) return { gender: "Nữ" };
   if (["khac", "other"].includes(n)) return { gender: "Khác" };
   return { gender: null, warning: `Giới tính "${value}" không nhận diện được — để trống` };
-}
-
-/** Bộ đọc CSV tối giản, hỗ trợ dấu ngoặc kép và dấu phân cách , hoặc ; */
-function parseCSV(text: string): string[][] {
-  const clean = text.replace(/^﻿/, "");
-  const firstLine = clean.split(/\r?\n/)[0] ?? "";
-  const sep = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
-  const rows: string[][] = [];
-  let row: string[] = [], field = "", quoted = false;
-  for (let i = 0; i < clean.length; i++) {
-    const c = clean[i];
-    if (quoted) {
-      if (c === '"' && clean[i + 1] === '"') { field += '"'; i++; }
-      else if (c === '"') quoted = false;
-      else field += c;
-    } else if (c === '"') quoted = true;
-    else if (c === sep) { row.push(field); field = ""; }
-    else if (c === "\n" || c === "\r") {
-      if (c === "\r" && clean[i + 1] === "\n") i++;
-      row.push(field); rows.push(row); row = []; field = "";
-    } else field += c;
-  }
-  if (field || row.length) { row.push(field); rows.push(row); }
-  return rows.map((r) => r.map((f) => f.trim()));
-}
-
-async function readTable(file: File): Promise<string[][]> {
-  const name = file.name.toLowerCase();
-  const buf = Buffer.from(await file.arrayBuffer());
-  if (name.endsWith(".csv")) return parseCSV(buf.toString("utf8"));
-  if (name.endsWith(".xlsx")) {
-    // Kiểm tra chữ ký ZIP (PK\x03\x04) — không tin vào phần mở rộng tệp
-    if (buf.subarray(0, 4).toString("hex") !== "504b0304") throw new ApiError(422, "Tệp không phải định dạng Excel (.xlsx) hợp lệ");
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf as unknown as ArrayBuffer);
-    const ws = wb.worksheets[0];
-    if (!ws) throw new ApiError(422, "Tệp Excel không có trang tính nào");
-    const out: string[][] = [];
-    ws.eachRow({ includeEmpty: false }, (r) => {
-      const values: string[] = [];
-      for (let c = 1; c <= ws.columnCount; c++) values.push(cellToString(r.getCell(c).value));
-      out.push(values);
-    });
-    return out;
-  }
-  throw new ApiError(422, "Chỉ hỗ trợ tệp .xlsx hoặc .csv");
 }
 
 export async function previewImport(classId: string, file: File) {
@@ -122,9 +66,9 @@ export async function previewImport(classId: string, file: File) {
   const body = table.slice(headerIdx + 1).filter((r) => r.some((c) => c));
   if (body.length > IMPORT_MAX_ROWS) throw new ApiError(422, `Tối đa ${IMPORT_MAX_ROWS} học sinh mỗi lần nhập`);
 
-  const existingCodes = new Set(
-    (await prisma.student.findMany({ where: { classId, studentCode: { not: null } }, select: { studentCode: true } })).map((s) => s.studentCode),
-  );
+  const existing = await prisma.student.findMany({ where: { classId }, select: { studentCode: true, fullName: true } });
+  const existingCodes = new Set(existing.filter((s) => s.studentCode).map((s) => s.studentCode));
+  const existingNames = new Set(existing.map((s) => normalize(s.fullName)));
   const seenCodes = new Set<string>();
   const get = (r: string[], k: ColumnKey) => (columns[k] !== undefined ? (r[columns[k]!] ?? "").trim() : "");
 
@@ -135,8 +79,9 @@ export async function previewImport(classId: string, file: File) {
     const g = parseGender(raw.gender);
     if (g.warning) warnings.push(g.warning);
     const code = raw.studentCode || null;
-    if (code && existingCodes.has(code)) errors.push(`Mã "${code}" đã có trong lớp — sẽ bỏ qua`);
-    else if (code && seenCodes.has(code)) errors.push(`Mã "${code}" bị trùng trong tệp`);
+    if (code && seenCodes.has(code)) errors.push(`Mã "${code}" bị trùng trong tệp`);
+    else if ((code && existingCodes.has(code)) || (!code && existingNames.has(normalize(raw.fullName))))
+      warnings.push("Đã có trong lớp — sẽ cập nhật đặc trưng (sở thích, thế mạnh, cần hỗ trợ)");
     if (code) seenCodes.add(code);
 
     const parsed = importRowSchema.safeParse({

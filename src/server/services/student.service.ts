@@ -79,28 +79,41 @@ export async function deleteStudent(userId: string, id: string) {
   await prisma.student.delete({ where: { id } });
 }
 
-/** Ghi các dòng đã xem trước. Bỏ qua mã trùng (không ghi đè). */
+const norm = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/\s+/g, " ").trim();
+
+/**
+ * Ghi các dòng đã xem trước. Học sinh đã có trong lớp (trùng mã, hoặc trùng họ tên khi không có mã)
+ * được CẬP NHẬT đặc trưng: nhóm đặc trưng nào có dữ liệu trong tệp sẽ thay thế dữ liệu cũ.
+ */
 export async function importStudents(userId: string, classId: string, rows: ImportRow[]) {
   await assertClassOwner(userId, classId);
-  const existing = new Set(
-    (await prisma.student.findMany({ where: { classId, studentCode: { not: null } }, select: { studentCode: true } })).map((s) => s.studentCode!),
-  );
+  const existing = await prisma.student.findMany({ where: { classId }, select: { id: true, studentCode: true, fullName: true } });
+  const byCode = new Map(existing.filter((s) => s.studentCode).map((s) => [s.studentCode!, s.id]));
+  const byName = new Map(existing.map((s) => [norm(s.fullName), s.id]));
+  let created = 0, updated = 0;
   const seen = new Set<string>();
-  const toCreate = rows.filter((r) => {
-    if (!r.studentCode) return true;
-    if (existing.has(r.studentCode) || seen.has(r.studentCode)) return false;
-    seen.add(r.studentCode);
-    return true;
+  await prisma.$transaction(async (tx) => {
+    for (const r of rows) {
+      const id = r.studentCode ? byCode.get(r.studentCode) : byName.get(norm(r.fullName));
+      if (id) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const kinds: TraitKind[] = [];
+        if (r.interests.length) kinds.push("INTEREST");
+        if (r.strengths.length) kinds.push("STRENGTH");
+        if (r.needs.length) kinds.push("NEED");
+        await tx.studentTrait.deleteMany({ where: { studentId: id, kind: { in: kinds } } });
+        await tx.studentTrait.createMany({ data: traitRows(r).map((t) => ({ ...t, studentId: id })) });
+        if (r.gender || r.notes) await tx.student.update({ where: { id }, data: { ...(r.gender ? { gender: r.gender } : {}), ...(r.notes ? { notes: r.notes } : {}) } });
+        updated++;
+      } else {
+        if (r.studentCode) { if (seen.has(r.studentCode)) continue; seen.add(r.studentCode); }
+        await tx.student.create({
+          data: { classId, fullName: r.fullName, studentCode: r.studentCode, gender: r.gender, notes: r.notes, traits: { create: traitRows(r) } },
+        });
+        created++;
+      }
+    }
   });
-  await prisma.$transaction(
-    toCreate.map((r) =>
-      prisma.student.create({
-        data: {
-          classId, fullName: r.fullName, studentCode: r.studentCode, gender: r.gender, notes: r.notes,
-          traits: { create: traitRows(r) },
-        },
-      }),
-    ),
-  );
-  return { created: toCreate.length, skipped: rows.length - toCreate.length };
+  return { created, updated, skipped: rows.length - created - updated };
 }

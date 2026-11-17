@@ -16,7 +16,7 @@ export function handleApiError(err: unknown) {
   if (err instanceof ApiError) return NextResponse.json({ error: err.message, details: err.details }, { status: err.status });
   if (err instanceof ZodError) {
     const { fieldErrors, formErrors } = err.flatten();
-    return NextResponse.json({ error: formErrors[0] ?? "Dữ liệu không hợp lệ", details: fieldErrors }, { status: 422 });
+    return NextResponse.json({ error: formErrors[0] ?? err.issues[0]?.message ?? "Dữ liệu không hợp lệ", details: fieldErrors }, { status: 422 });
   }
   console.error("[api] unexpected error", err);
   return NextResponse.json({ error: "Đã xảy ra lỗi hệ thống" }, { status: 500 });

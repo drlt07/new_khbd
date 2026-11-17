@@ -20,3 +20,9 @@ export async function traitSuggestions(userId: string) {
   });
   return splitTraits(rows);
 }
+
+/** Gợi ý từ khóa đặc trưng nhóm: thế mạnh + sở thích + nhu cầu đang có trong lớp */
+export async function classKeywordSuggestions(classId: string) {
+  const rows = await prisma.studentTrait.findMany({ where: { student: { classId } }, distinct: ["label"], select: { label: true }, orderBy: { label: "asc" } });
+  return rows.map((r) => r.label);
+}

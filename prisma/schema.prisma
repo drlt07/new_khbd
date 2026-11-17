@@ -1,5 +1,5 @@
 // Chia nhóm học sinh — schema tối giản.
-// Nguyên tắc: không lưu xếp loại học lực; nhóm gắn với từng lần chia (bài học), không gắn cứng vào học sinh.
+// Pha 1: học sinh + đặc trưng + bảng điểm -> bộ nhóm do GV định nghĩa. Pha 2: KHBD giao nhiệm vụ theo từng nhóm.
 
 generator client {
   provider = "prisma-client-js"
@@ -31,8 +31,9 @@ model Class {
   updatedAt  DateTime @updatedAt
 
   owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  students  Student[]
-  groupings Grouping[]
+  students    Student[]
+  groupings   Grouping[]
+  scoreSheets ScoreSheet[]
 
   @@unique([ownerId, name, schoolYear])
 }
@@ -51,6 +52,7 @@ model Student {
   class        Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
   traits       StudentTrait[]
   memberships  GroupMember[]
+  scores       StudentScore[]
 
   @@unique([classId, studentCode])
   @@index([classId])
@@ -75,45 +77,153 @@ model StudentTrait {
   @@unique([studentId, kind, label])
 }
 
-enum GroupingMethod {
-  MIXED    // Đa dạng: mỗi nhóm có nhiều thế mạnh khác nhau, HS cần hỗ trợ được rải đều
-  INTEREST // Theo sở thích chung
-  RANDOM   // Ngẫu nhiên, sĩ số cân bằng
+/// Một lần tải bảng điểm lên (Pha 1). Điểm chỉ dùng khi GV đặt khoảng điểm cho nhóm.
+model ScoreSheet {
+  id        String   @id @default(cuid())
+  classId   String
+  subject   String // môn học của bảng điểm
+  fileName  String
+  createdAt DateTime @default(now())
+
+  class   Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  columns ScoreColumn[]
+  groupings Grouping[]
 }
 
-/// Một lần chia nhóm cho một bài học / hoạt động
-model Grouping {
-  id         String         @id @default(cuid())
-  classId    String
-  title      String // tên bài học / hoạt động
-  method     GroupingMethod
-  isSample   Boolean        @default(false)
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+/// Một cột điểm trong bảng (TX1, Giữa kỳ, Cuối kỳ...)
+model ScoreColumn {
+  id        String @id @default(cuid())
+  sheetId   String
+  label     String
+  weight    Int    @default(1) // hệ số: TX 1, GK 2, CK 3
+  sortOrder Int    @default(0)
 
-  class  Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
-  groups Group[]
+  sheet  ScoreSheet     @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  scores StudentScore[]
+}
+
+model StudentScore {
+  id        String @id @default(cuid())
+  columnId  String
+  studentId String
+  value     Float
+
+  column  ScoreColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  student Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([columnId, studentId])
+}
+
+/// PHA 1 — Bộ nhóm của một lớp: GV đặt số nhóm và đặc trưng từng nhóm, hệ thống xếp học sinh.
+/// Một bộ nhóm được dùng lại cho nhiều KHBD ở Pha 2.
+model Grouping {
+  id           String   @id @default(cuid())
+  classId      String
+  title        String // ví dụ "Nhóm Ngữ văn – HK I"
+  subject      String?
+  scoreSheetId String? // bảng điểm dùng để xếp (nếu nhóm có khoảng điểm)
+  balanceSizes Boolean  @default(true) // giữ sĩ số các nhóm gần bằng nhau
+  isSample     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  class       Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  scoreSheet  ScoreSheet?  @relation(fields: [scoreSheetId], references: [id], onDelete: SetNull)
+  groups      Group[]
+  lessonPlans LessonPlan[]
 }
 
 model Group {
-  id         String @id @default(cuid())
+  id         String   @id @default(cuid())
   groupingId String
   name       String
-  task       String? // nhiệm vụ / vai trò của nhóm
-  sortOrder  Int    @default(0)
+  profile    String? // đặc trưng nhóm do GV mô tả
+  keywords   String[] @default([]) // thế mạnh / sở thích phù hợp (dùng để xếp HS)
+  scoreMin   Float? // khoảng điểm phù hợp (tùy chọn)
+  scoreMax   Float?
+  forSupport Boolean  @default(false) // nhóm ưu tiên HS cần hỗ trợ
+  sortOrder  Int      @default(0)
 
   grouping Grouping      @relation(fields: [groupingId], references: [id], onDelete: Cascade)
   members  GroupMember[]
+  tasks    GroupTask[]
 }
 
 model GroupMember {
   id        String  @id @default(cuid())
   groupId   String
   studentId String
-  reason    String? // lý do xếp vào nhóm (từ hồ sơ)
+  reason    String? // lý do xếp vào nhóm
 
   group   Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, studentId])
+}
+
+// ─────────────── PHA 2 — KHBD cá thể hóa theo nhóm ───────────────
+
+enum LessonStatus {
+  DRAFT
+  DONE
+}
+
+model LessonPlan {
+  id              String       @id @default(cuid())
+  groupingId      String
+  subject         String
+  title           String // tên bài học
+  periods         Int          @default(1) // số tiết
+  requirements    String? // yêu cầu cần đạt (mỗi dòng một ý)
+  knowledgeGoals  String?
+  competencyGoals String?
+  qualityGoals    String?
+  materials       String? // thiết bị dạy học và học liệu
+  assessment      String? // đánh giá
+  status          LessonStatus @default(DRAFT)
+  isSample        Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  grouping   Grouping         @relation(fields: [groupingId], references: [id], onDelete: Cascade)
+  activities LessonActivity[]
+}
+
+enum ActivityPhase {
+  OPENING // Mở đầu
+  KNOWLEDGE // Hình thành kiến thức
+  PRACTICE // Luyện tập
+  APPLICATION // Vận dụng
+}
+
+model LessonActivity {
+  id           String        @id @default(cuid())
+  lessonPlanId String
+  phase        ActivityPhase
+  title        String
+  minutes      Int?
+  goal         String?
+  content      String?
+  product      String?
+  organization String? // tổ chức thực hiện (4 bước)
+  byGroup      Boolean       @default(true) // hoạt động có giao nhiệm vụ theo nhóm
+  sortOrder    Int           @default(0)
+
+  lessonPlan LessonPlan  @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  tasks      GroupTask[]
+}
+
+/// Nhiệm vụ riêng của một nhóm trong một hoạt động
+model GroupTask {
+  id         String  @id @default(cuid())
+  activityId String
+  groupId    String
+  task       String
+  product    String?
+  support    String? // mức hỗ trợ / học liệu
+
+  activity LessonActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  group    Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, groupId])
 }
