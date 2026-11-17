@@ -17,7 +17,7 @@ export async function middleware(req: NextRequest) {
   }
 
   if (session && (pathname === "/login" || pathname === "/register")) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return NextResponse.redirect(new URL("/groups", req.url));
   }
   return NextResponse.next();
 }

@@ -1,16 +1,12 @@
-import { NextRequest } from "next/server";
 import { registerSchema } from "@/schemas/auth";
-import { registerTeacher } from "@/server/services/auth.service";
+import { registerUser } from "@/server/services/auth.service";
 import { createSessionCookie } from "@/lib/auth/session";
-import { handleApiError, ok } from "@/lib/api";
-import { writeAudit } from "@/lib/audit";
+import { handleApiError, ok, readJson } from "@/lib/api";
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const input = registerSchema.parse(await req.json());
-    const session = await registerTeacher(input);
+    const session = await registerUser(registerSchema.parse(await readJson(req)));
     await createSessionCookie(session);
-    await writeAudit({ userId: session.userId, action: "auth.register", entityType: "User", entityId: session.userId });
     return ok({ name: session.name }, { status: 201 });
   } catch (err) {
     return handleApiError(err);

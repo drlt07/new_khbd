@@ -1,33 +1,31 @@
 import { z } from "zod";
-import { ProfileStatus } from "@prisma/client";
-import { optionalDate, optionalText } from "./common";
+import { optionalText } from "./common";
 
 export const GENDERS = ["Nam", "Nữ", "Khác"] as const;
+export const TRAIT_KINDS = ["INTEREST", "STRENGTH", "NEED"] as const;
+
+const traitList = z.array(z.string().trim().min(1).max(60)).max(15).default([]);
 
 export const studentInputSchema = z.object({
   fullName: z.string().trim().min(2, "Họ tên tối thiểu 2 ký tự").max(100),
   studentCode: optionalText(30),
-  dateOfBirth: optionalDate,
   gender: z.preprocess((v) => (v === "" ? null : v), z.enum(GENDERS, { message: "Giới tính phải là Nam, Nữ hoặc Khác" }).nullable().optional()),
-  notes: optionalText(1000),
+  notes: optionalText(500),
+  interests: traitList,
+  strengths: traitList,
+  needs: traitList,
 });
-export const studentUpdateSchema = studentInputSchema.partial().extend({
-  classId: z.string().optional(), // chuyển lớp
-});
+export const studentUpdateSchema = studentInputSchema.partial();
 
-export const studentFilterSchema = z.object({
-  q: z.string().trim().optional(),
-  classId: z.string().trim().optional(),
-  status: z.nativeEnum(ProfileStatus).optional().or(z.literal("").transform(() => undefined)),
-});
-
-/** Một dòng đã chuẩn hóa từ file Excel (dùng cho bước xác nhận import) */
+/** Một dòng đã chuẩn hóa từ file Excel (bước xác nhận import) */
 export const importRowSchema = z.object({
   fullName: z.string().trim().min(2).max(100),
   studentCode: z.string().trim().max(30).nullable(),
-  dateOfBirth: z.string().nullable(), // ISO yyyy-mm-dd
   gender: z.enum(GENDERS).nullable(),
-  notes: z.string().max(1000).nullable(),
+  notes: z.string().max(500).nullable(),
+  interests: z.array(z.string().max(60)).max(15),
+  strengths: z.array(z.string().max(60)).max(15),
+  needs: z.array(z.string().max(60)).max(15),
 });
 export const importCommitSchema = z.object({ rows: z.array(importRowSchema).min(1).max(500) });
 

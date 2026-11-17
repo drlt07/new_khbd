@@ -7,19 +7,24 @@ import { GENDERS, importRowSchema, type ImportRow } from "@/schemas/student";
 export const IMPORT_MAX_BYTES = 2 * 1024 * 1024;
 export const IMPORT_MAX_ROWS = 500;
 
-type ColumnKey = "fullName" | "studentCode" | "dateOfBirth" | "gender" | "notes";
+type ColumnKey = "fullName" | "studentCode" | "gender" | "notes" | "interests" | "strengths" | "needs";
 
 /** Nhận diện cột theo tiêu đề (không dấu, không phân biệt hoa thường). */
 const HEADER_ALIASES: Record<ColumnKey, string[]> = {
   fullName: ["ho va ten", "ho ten", "hoten", "ten hoc sinh", "full name", "name"],
   studentCode: ["ma hoc sinh", "ma hs", "mahs", "ma", "student code", "code"],
-  dateOfBirth: ["ngay sinh", "ngaysinh", "date of birth", "dob"],
+  interests: ["so thich", "sothich", "interests"],
+  strengths: ["the manh", "themanh", "strengths"],
+  needs: ["can ho tro", "nhu cau ho tro", "kho khan", "needs"],
   gender: ["gioi tinh", "gioitinh", "gender"],
   notes: ["ghi chu", "ghichu", "notes", "note"],
 };
 
 const normalize = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/\(.*?\)/g, "").replace(/[*:]/g, "").trim();
+
+/** "Vẽ, Thuyết trình; Viết" -> ["Vẽ", "Thuyết trình", "Viết"] */
+const splitList = (v: string) => (v ? v.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean).slice(0, 15) : []);
 
 export type PreviewRow = {
   rowNumber: number;
@@ -38,19 +43,6 @@ function cellToString(v: ExcelJS.CellValue): string {
     if ("richText" in v) return v.richText.map((r) => r.text).join("");
   }
   return String(v).trim();
-}
-
-function parseDate(value: string): { iso: string | null; error?: string } {
-  if (!value) return { iso: null };
-  let m = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  let y: number, mo: number, d: number;
-  if (m) [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  else if ((m = value.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/))) [d, mo, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  else return { iso: null, error: `Ngày sinh "${value}" không đúng định dạng dd/mm/yyyy` };
-  const date = new Date(Date.UTC(y, mo - 1, d));
-  if (date.getUTCMonth() !== mo - 1 || y < 1990 || y > new Date().getFullYear())
-    return { iso: null, error: `Ngày sinh "${value}" không hợp lệ` };
-  return { iso: date.toISOString().slice(0, 10) };
 }
 
 function parseGender(value: string): { gender: ImportRow["gender"]; warning?: string } {
@@ -140,8 +132,6 @@ export async function previewImport(classId: string, file: File) {
     const errors: string[] = [];
     const warnings: string[] = [];
     const raw = Object.fromEntries((Object.keys(HEADER_ALIASES) as ColumnKey[]).map((k) => [k, get(r, k)]));
-    const dob = parseDate(raw.dateOfBirth);
-    if (dob.error) errors.push(dob.error);
     const g = parseGender(raw.gender);
     if (g.warning) warnings.push(g.warning);
     const code = raw.studentCode || null;
@@ -152,7 +142,9 @@ export async function previewImport(classId: string, file: File) {
     const parsed = importRowSchema.safeParse({
       fullName: raw.fullName,
       studentCode: code,
-      dateOfBirth: dob.iso,
+      interests: splitList(raw.interests),
+      strengths: splitList(raw.strengths),
+      needs: splitList(raw.needs),
       gender: g.gender,
       notes: raw.notes || null,
     });
@@ -176,13 +168,15 @@ export async function buildImportTemplate() {
   const ws = wb.addWorksheet("Danh sách học sinh");
   ws.columns = [
     { header: "STT", width: 6 },
-    { header: "Mã học sinh", width: 16 },
-    { header: "Họ và tên*", width: 30 },
-    { header: "Ngày sinh (dd/mm/yyyy)", width: 22 },
-    { header: "Giới tính", width: 12 },
-    { header: "Ghi chú", width: 40 },
+    { header: "Mã học sinh", width: 14 },
+    { header: "Họ và tên*", width: 28 },
+    { header: "Giới tính", width: 10 },
+    { header: "Sở thích", width: 30 },
+    { header: "Thế mạnh", width: 30 },
+    { header: "Cần hỗ trợ", width: 30 },
+    { header: "Ghi chú", width: 30 },
   ];
   ws.getRow(1).font = { bold: true };
-  ws.addRow([1, "HS001", "Nguyễn Văn A (ví dụ — xóa dòng này)", "15/03/2010", GENDERS[0], ""]);
+  ws.addRow([1, "HS001", "Nguyễn Văn A (ví dụ — xóa dòng này)", GENDERS[0], "Văn học, Thiết kế", "Thuyết trình", "Cần thêm thời gian", ""]);
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

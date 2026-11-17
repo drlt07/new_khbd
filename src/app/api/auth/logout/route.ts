@@ -1,14 +1,7 @@
-import { clearSessionCookie, getSession } from "@/lib/auth/session";
-import { handleApiError, ok } from "@/lib/api";
-import { writeAudit } from "@/lib/audit";
+import { clearSessionCookie } from "@/lib/auth/session";
+import { ok } from "@/lib/api";
 
 export async function POST() {
-  try {
-    const session = await getSession();
-    await clearSessionCookie();
-    if (session) await writeAudit({ userId: session.userId, action: "auth.logout" });
-    return ok({ success: true });
-  } catch (err) {
-    return handleApiError(err);
-  }
+  await clearSessionCookie();
+  return ok({ success: true });
 }

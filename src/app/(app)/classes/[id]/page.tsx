@@ -1,78 +1,55 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
-import { requireTeacher } from "@/lib/auth/session";
-import { ApiError } from "@/lib/api";
-import { getClassDetail, listClasses } from "@/server/services/class.service";
+import { ChevronLeft, Shuffle } from "lucide-react";
+import { requireUser } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
+import { listClasses } from "@/server/services/class.service";
 import { listStudents } from "@/server/services/student.service";
-import { listSubjectsForTeacher } from "@/server/services/subject.service";
+import { toStudentRows, traitSuggestions } from "@/server/services/views";
 import { PageHeader } from "@/components/layout/page-header";
-import { ClassActions } from "@/components/classes/class-actions";
+import { ClassFormButton } from "@/components/classes/class-form-dialog";
+import { DeleteClassButton } from "@/components/classes/class-actions";
 import { StudentToolbar } from "@/components/students/student-toolbar";
 import { StudentTable } from "@/components/students/student-table";
-import { toStudentRows } from "@/components/students/to-student-rows";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge, SampleBadge } from "@/components/ui/badge";
-import { Alert } from "@/components/ui/alert";
-import { ClipboardCheck, FolderOpen, Hourglass, Users } from "lucide-react";
+import { TraitLegend } from "@/components/students/trait-chips";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
-export const metadata: Metadata = { title: "Chi tiết lớp" };
+export const metadata: Metadata = { title: "Lớp học" };
 
-export default async function ClassDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await requireTeacher();
+export default async function ClassPage({ params }: { params: Promise<{ id: string }> }) {
+  const session = await requireUser();
   const { id } = await params;
-  const cls = await getClassDetail(session.teacherId, id).catch((e) => {
-    if (e instanceof ApiError && e.status === 404) notFound();
-    throw e;
-  });
-  const [students, subjects, activeClasses] = await Promise.all([
-    listStudents(session.teacherId, { classId: id }).then((list) => (cls.isArchived ? [] : list)),
-    listSubjectsForTeacher(session.teacherId),
-    listClasses(session.teacherId),
+  const cls = await prisma.class.findFirst({ where: { id, ownerId: session.userId } });
+  if (!cls) notFound();
+  const [students, classes, suggestions] = await Promise.all([
+    listStudents(session.userId, { classId: id }),
+    listClasses(session.userId),
+    traitSuggestions(session.userId),
   ]);
-  const rows = toStudentRows(students);
-  const confirmed = students.filter((s) => s.profileStatus === "CONFIRMED").length;
-  const pending = students.filter((s) => s.profileStatus === "PENDING_REVIEW").length;
-  const classOptions = activeClasses.map((c) => ({ id: c.id, name: c.name, schoolYear: c.schoolYear }));
+  const classOptions = classes.map((c) => ({ id: c.id, name: c.name, schoolYear: c.schoolYear }));
+  const missing = students.filter((s) => !s.traits.length).length;
 
   return (
     <>
-      <Link href="/classes" className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ChevronLeft className="size-4" /> Danh sách lớp
-      </Link>
+      <Link href="/classes" className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ChevronLeft className="size-4" /> Lớp học</Link>
       <PageHeader
         title={`Lớp ${cls.name}`}
-        description={[`Năm học ${cls.schoolYear}`, cls.gradeLevel ? `Khối ${cls.gradeLevel}` : null, cls.description].filter(Boolean).join(" · ")}
+        description={`Năm học ${cls.schoolYear} · ${students.length} học sinh${missing ? ` · ${missing} học sinh chưa có thông tin` : ""}`}
         actions={
           <>
-            {!cls.isArchived && <StudentToolbar classes={classOptions} defaultClassId={cls.id} />}
-            <ClassActions
-              redirectAfterDelete="/classes"
-              subjectSuggestions={subjects.map((s) => s.name)}
-              cls={{ id: cls.id, name: cls.name, schoolYear: cls.schoolYear, gradeLevel: cls.gradeLevel, description: cls.description, isArchived: cls.isArchived, subjects: cls.subjects.map((s) => s.name) }}
-            />
+            <StudentToolbar classes={classOptions} defaultClassId={cls.id} suggestions={suggestions} />
+            <ClassFormButton initial={{ id: cls.id, name: cls.name, schoolYear: cls.schoolYear }} />
+            <DeleteClassButton id={cls.id} name={cls.name} />
+            <Button asChild disabled={students.length < 2}><Link href={`/groups/new?classId=${cls.id}`}><Shuffle /> Chia nhóm lớp này</Link></Button>
           </>
         }
       />
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {cls.isSample && <SampleBadge />}
-        {cls.subjects.map((s) => <Badge key={s.id} tone="primary">{s.name}</Badge>)}
-      </div>
-      {cls.isArchived && <Alert tone="warning" className="mb-4">Lớp đã được lưu trữ. Khôi phục lớp để xem và chỉnh sửa học sinh.</Alert>}
-
-      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Học sinh" value={cls._count.students} icon={Users} accent="info" />
-        <StatCard label="Hồ sơ đã xác nhận" value={confirmed} icon={ClipboardCheck} accent="success" />
-        <StatCard label="Chờ xác nhận" value={pending} icon={Hourglass} accent="warning" />
-        <StatCard label="Minh chứng" value={cls._count.evidences} icon={FolderOpen} />
-      </div>
-
       <Card>
-        <CardHeader><CardTitle>Danh sách học sinh</CardTitle></CardHeader>
-        <CardContent>
-          <StudentTable students={rows} classes={classOptions} showClass={false} />
+        <CardContent className="space-y-3 pt-5">
+          <TraitLegend />
+          <StudentTable students={toStudentRows(students)} classes={classOptions} suggestions={suggestions} showClass={false} />
         </CardContent>
       </Card>
     </>

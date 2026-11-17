@@ -1,29 +1,30 @@
-# AI Personalized Lesson Planner
+# Chia nhóm học sinh
 
-Nền tảng hỗ trợ giáo viên xây dựng **kế hoạch bài dạy (KHBD) có cá thể hóa** dựa trên hồ sơ đặc điểm, sở thích, thế mạnh và nhu cầu hỗ trợ của học sinh. Hệ thống **không** dùng AI để xếp loại học sinh; giáo viên luôn là người quyết định cuối cùng.
+Ứng dụng giúp giáo viên chia học sinh thành các nhóm hoạt động cho từng bài học, dựa trên **sở thích, thế mạnh và nhu cầu hỗ trợ** — không dựa trên điểm số / học lực.
 
-- Kiến trúc: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Kế hoạch sprint & tiến độ: [`docs/SPRINT_PLAN.md`](docs/SPRINT_PLAN.md)
+## Chức năng
+- **Lớp học** – tạo, sửa, xóa lớp.
+- **Học sinh** – thêm tay hoặc nhập Excel (có tệp mẫu, xem trước lỗi từng dòng); mỗi học sinh có sở thích, thế mạnh, cần hỗ trợ.
+- **Chia nhóm** – chọn lớp, bài học, cách chia, số nhóm, học sinh vắng → hệ thống gợi ý kèm lý do → giáo viên kéo thả chỉnh sửa, đặt tên & nhiệm vụ nhóm → lưu, xuất Excel, in.
+
+### Ba cách chia (`src/lib/grouping/algorithm.ts`)
+| Cách | Nguyên tắc |
+|---|---|
+| Đa dạng thế mạnh | Mỗi nhóm nhiều thế mạnh khác nhau; HS cần hỗ trợ rải đều và xếp cùng bạn có thế mạnh |
+| Theo sở thích | Mỗi nhóm một chủ đề sở thích; HS không trùng chủ đề được ghi là “cơ hội thử sức lĩnh vực mới” |
+| Ngẫu nhiên | Sĩ số cân bằng |
+
+Sĩ số các nhóm luôn chênh nhau tối đa 1. Thiếu dữ liệu thì ghi rõ “Chưa có dữ liệu”, không suy đoán.
 
 ## Công nghệ
-Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · UI theo quy ước shadcn/ui (Radix) · PostgreSQL · Prisma 6 · Zod · JWT (jose) · AI service độc lập (mock / OpenAI).
+Next.js 15 · TypeScript · Tailwind CSS · PostgreSQL · Prisma.
 
 ## Chạy local
-
-Yêu cầu: Node.js ≥ 20, PostgreSQL ≥ 14.
-
 ```bash
-cp .env.example .env        # điền DATABASE_URL, AUTH_SECRET (>= 32 ký tự)
+cp .env.example .env      # điền DATABASE_URL, AUTH_SECRET
 npm install
-npm run db:migrate          # tạo bảng
-npm run db:seed             # dữ liệu mẫu (được gắn nhãn)
-npm run dev                 # http://localhost:3000
+npx prisma migrate dev    # tạo bảng
+npm run db:seed           # dữ liệu mẫu (tên hư cấu, có gắn nhãn)
+npm run dev               # http://localhost:3000
 ```
-
-Tài khoản mẫu: `giaovien@demo.vn` / `Demo@1234` (giáo viên), `admin@demo.vn` / `Demo@1234` (quản trị).
-
-## AI
-Mặc định `AI_PROVIDER=mock`: mọi kết quả AI là **mô phỏng**, được gắn nhãn trên giao diện và lưu `isMock=true`. Để dùng AI thật, đặt `AI_PROVIDER=openai` và `OPENAI_API_KEY` (chỉ ở server).
-
-## Scripts
-`dev`, `build`, `start`, `lint`, `typecheck`, `db:migrate`, `db:deploy`, `db:seed`, `db:studio`.
+Tài khoản mẫu: `giaovien@demo.vn` / `Demo@1234`.

@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { FormField } from "./form-field";
-import { useApiForm } from "@/hooks/use-api-form";
+import { useApiForm } from "./use-api-form";
 
 export function RegisterForm() {
   const router = useRouter();
@@ -15,7 +15,7 @@ export function RegisterForm() {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(e.currentTarget));
     if (await submit(body)) {
-      router.replace("/dashboard");
+      router.replace("/groups");
       router.refresh();
     }
   }
@@ -25,7 +25,6 @@ export function RegisterForm() {
       {error && <Alert tone="danger">{error}</Alert>}
       <FormField id="fullName" label="Họ và tên" autoComplete="name" required error={fieldError("fullName")} />
       <FormField id="email" label="Email" type="email" autoComplete="email" required error={fieldError("email")} />
-      <FormField id="schoolName" label="Trường (không bắt buộc)" error={fieldError("schoolName")} />
       <FormField id="password" label="Mật khẩu" type="password" autoComplete="new-password" required error={fieldError("password")} />
       <FormField id="confirmPassword" label="Nhập lại mật khẩu" type="password" autoComplete="new-password" required error={fieldError("confirmPassword")} />
       <Button type="submit" className="w-full" disabled={pending}>

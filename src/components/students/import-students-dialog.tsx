@@ -89,7 +89,7 @@ export function ImportStudentsDialog({
             >
               {pending && !preview ? <Loader2 className="size-6 animate-spin" /> : <Upload className="size-6" />}
               <span>{fileName ? <><FileSpreadsheet className="mr-1 inline size-4" />{fileName} — chọn tệp khác</> : "Kéo thả hoặc bấm để chọn tệp .xlsx / .csv"}</span>
-              <span className="text-xs">Cột bắt buộc: Họ và tên. Cột tùy chọn: Mã học sinh, Ngày sinh (dd/mm/yyyy), Giới tính, Ghi chú.</span>
+              <span className="text-xs">Cột bắt buộc: Họ và tên. Tùy chọn: Mã học sinh, Giới tính, Sở thích, Thế mạnh, Cần hỗ trợ (cách nhau bằng dấu phẩy), Ghi chú.</span>
             </button>
             <input
               ref={fileRef}
@@ -108,15 +108,14 @@ export function ImportStudentsDialog({
                 </div>
                 <div className="max-h-72 overflow-y-auto rounded-lg border">
                   <Table>
-                    <THead><tr><TH>Dòng</TH><TH>Họ và tên</TH><TH>Mã HS</TH><TH>Ngày sinh</TH><TH>Giới tính</TH><TH>Trạng thái</TH></tr></THead>
+                    <THead><tr><TH>Dòng</TH><TH>Họ và tên</TH><TH>Mã HS</TH><TH>Sở thích · Thế mạnh · Cần hỗ trợ</TH><TH>Trạng thái</TH></tr></THead>
                     <TBody>
                       {preview.rows.map((r) => (
                         <TR key={r.rowNumber} className={r.data ? "" : "bg-danger-soft/50"}>
                           <TD className="tabular-nums text-muted-foreground">{r.rowNumber}</TD>
                           <TD>{r.raw.fullName || <i className="text-muted-foreground">(trống)</i>}</TD>
                           <TD>{r.raw.studentCode}</TD>
-                          <TD>{r.raw.dateOfBirth}</TD>
-                          <TD>{r.data?.gender ?? r.raw.gender}</TD>
+                          <TD className="text-xs">{[r.raw.interests, r.raw.strengths, r.raw.needs].filter(Boolean).join(" · ")}</TD>
                           <TD className="min-w-48 text-xs">
                             {r.errors.map((e) => <p key={e} className="text-danger">{e}</p>)}
                             {r.warnings.map((w) => <p key={w} className="text-warning">{w}</p>)}

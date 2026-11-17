@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { FormField } from "./form-field";
-import { useApiForm } from "@/hooks/use-api-form";
+import { useApiForm } from "./use-api-form";
 
 export function LoginForm() {
   const router = useRouter();
@@ -18,7 +18,7 @@ export function LoginForm() {
     const res = await submit({ email: fd.get("email"), password: fd.get("password") });
     if (res) {
       const next = params.get("next");
-      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
+      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/groups");
       router.refresh();
     }
   }

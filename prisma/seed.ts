@@ -1,146 +1,106 @@
 /**
- * DỮ LIỆU MẪU để phát triển & kiểm thử. Mọi bản ghi lớp/học sinh/KHBD đều có isSample = true
- * và được gắn nhãn "Dữ liệu mẫu" trên giao diện. Tên học sinh là tên hư cấu.
- * Chạy lại an toàn: xóa dữ liệu mẫu cũ của tài khoản demo trước khi tạo lại.
+ * DỮ LIỆU MẪU (tên hư cấu, isSample = true, hiển thị nhãn "Dữ liệu mẫu").
+ * Chạy lại an toàn: xóa dữ liệu mẫu cũ của tài khoản demo rồi tạo lại.
  */
-import { PrismaClient, type ProfileDimension, type ProfileStatus } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { DEFAULT_CRITERIA } from "../src/config/default-framework";
+import { suggestGroups } from "../src/lib/grouping/algorithm";
 
 const prisma = new PrismaClient();
 
+// [Họ tên, sở thích, thế mạnh, cần hỗ trợ]
+type Row = [string, string[], string[], string[]];
 
-const NAMES_10A1 = ["Nguyễn Minh An", "Trần Bảo Châu", "Lê Gia Huy", "Phạm Khánh Linh", "Hoàng Đức Minh", "Vũ Ngọc Hân", "Đặng Quốc Bảo", "Bùi Thảo Vy", "Đỗ Tuấn Kiệt", "Ngô Phương Anh", "Dương Hải Đăng", "Lý Thanh Trúc"];
-const NAMES_11A2 = ["Phan Nhật Nam", "Trịnh Mai Chi", "Võ Thành Đạt", "Mai Hà My", "Tạ Quang Vinh", "Hồ Yến Nhi", "Lâm Gia Bảo", "Châu Tú Anh"];
-const STATUS_CYCLE: ProfileStatus[] = ["CONFIRMED", "CONFIRMED", "PENDING_REVIEW", "NOT_ANALYZED", "CONFIRMED", "NEEDS_MORE_DATA"];
+const CLASS_12A1: Row[] = [
+  ["Nguyễn Minh An", ["Văn học", "Sáng tác"], ["Viết sáng tạo", "Tưởng tượng"], ["Kỹ năng trình bày"]],
+  ["Trần Bảo Châu", ["Hoạt động xã hội"], ["Tổ chức nhóm", "Thuyết trình"], []],
+  ["Lê Gia Huy", ["Lập trình"], ["Tư duy logic"], ["Ngại phát biểu"]],
+  ["Phạm Khánh Linh", ["Thiết kế", "Hội họa"], ["Vẽ", "Thiết kế đồ họa"], []],
+  ["Hoàng Đức Minh", ["Thể thao"], [], ["Cần thêm thời gian"]],
+  ["Vũ Ngọc Hân", ["Văn học"], ["Đọc hiểu", "Phân tích"], []],
+  ["Đặng Quốc Bảo", ["Lập trình", "Khoa học"], ["Tư duy logic", "Giải quyết vấn đề"], []],
+  ["Bùi Thảo Vy", ["Âm nhạc"], ["Thuyết trình"], ["Kỹ năng viết"]],
+  ["Đỗ Tuấn Kiệt", ["Thể thao"], [], []],
+  ["Ngô Phương Anh", ["Thiết kế"], ["Vẽ"], ["Cần thêm thời gian"]],
+  ["Dương Hải Đăng", ["Khoa học"], ["Quan sát"], []],
+  ["Lý Thanh Trúc", ["Văn học", "Sân khấu"], ["Diễn xuất", "Thuyết trình"], []],
+  ["Phan Nhật Nam", ["Lập trình"], ["Làm video"], ["Kỹ năng trình bày"]],
+  ["Trịnh Mai Chi", ["Hoạt động xã hội"], ["Hợp tác", "Lắng nghe"], []],
+  ["Võ Thành Đạt", ["Âm nhạc"], [], ["Ngại phát biểu"]],
+  ["Mai Hà My", ["Hội họa"], ["Vẽ", "Tưởng tượng"], []],
+  ["Tạ Quang Vinh", ["Khoa học"], ["Phân tích"], []],
+  ["Hồ Yến Nhi", ["Văn học"], ["Viết sáng tạo"], ["Cần thêm thời gian"]],
+  ["Lâm Gia Bảo", [], [], []],
+  ["Châu Tú Anh", ["Sân khấu"], ["Thuyết trình", "Tổ chức nhóm"], []],
+];
+
+const CLASS_10A1: Row[] = [
+  ["Kiều Minh Khang", ["Lập trình"], ["Tư duy logic"], []],
+  ["Lương Thu Trang", ["Văn học"], ["Viết sáng tạo"], ["Ngại phát biểu"]],
+  ["Quách Đình Phúc", ["Thể thao"], ["Tổ chức nhóm"], []],
+  ["Đinh Bảo Ngọc", ["Thiết kế"], ["Vẽ"], []],
+  ["Tôn Thất Huy", ["Khoa học"], [], ["Cần thêm thời gian"]],
+  ["Văn Ngọc Diệp", ["Âm nhạc"], ["Thuyết trình"], []],
+  ["Mạc Quang Tùng", ["Lập trình"], ["Làm video"], []],
+  ["Phùng Thị Hoa", ["Văn học"], ["Đọc hiểu"], ["Kỹ năng viết"]],
+];
 
 async function main() {
-  const email = "giaovien@demo.vn";
   const passwordHash = await bcrypt.hash("Demo@1234", 12);
-
-  const school =
-    (await prisma.school.findFirst({ where: { isSample: true } })) ??
-    (await prisma.school.create({ data: { name: "Trường THPT Mẫu (dữ liệu mẫu)", isSample: true } }));
-
   const user = await prisma.user.upsert({
-    where: { email },
-    update: { passwordHash, isActive: true },
-    create: {
-      email,
-      passwordHash,
-      fullName: "Cô Nguyễn Thu Hà",
-      role: "TEACHER",
-      teacher: { create: { schoolId: school.id, specialization: "Ngữ văn, Tin học" } },
-    },
-    include: { teacher: true },
-  });
-  const teacherId = user.teacher!.id;
-
-  await prisma.user.upsert({
-    where: { email: "admin@demo.vn" },
+    where: { email: "giaovien@demo.vn" },
     update: { passwordHash },
-    create: { email: "admin@demo.vn", passwordHash, fullName: "Quản trị hệ thống", role: "ADMIN", teacher: { create: { schoolId: school.id } } },
+    create: { email: "giaovien@demo.vn", passwordHash, fullName: "Cô Nguyễn Thu Hà" },
   });
+  await prisma.class.deleteMany({ where: { ownerId: user.id, isSample: true } });
 
-  // Dọn dữ liệu mẫu cũ (cascade sẽ xóa học sinh, KHBD...)
-  await prisma.class.deleteMany({ where: { ownerId: teacherId, isSample: true } });
-  await prisma.assessmentFramework.deleteMany({ where: { ownerId: teacherId, isDefault: true } });
-
-  const [nguVan, tinHoc] = await Promise.all(
-    ["Ngữ văn", "Tin học"].map((name) =>
-      prisma.subject.upsert({
-        where: { schoolId_name: { schoolId: school.id, name } },
-        update: {},
-        create: { name, schoolId: school.id },
-      }),
-    ),
-  );
-
-  await prisma.assessmentFramework.create({
-    data: {
-      ownerId: teacherId,
-      name: "Khung thông tin mặc định (A–F)",
-      description: "Bộ khung mặc định của hệ thống. Giáo viên có thể tùy chỉnh, bổ sung hoặc loại bỏ tiêu chí.",
-      isDefault: true,
-      criteria: {
-        create: Object.entries(DEFAULT_CRITERIA).flatMap(([dimension, names]) =>
-          names.map((name, i) => ({ dimension: dimension as ProfileDimension, name, sortOrder: i })),
-        ),
-      },
-    },
-  });
-
-  const classes = [
-    { name: "10A1", gradeLevel: 10, names: NAMES_10A1, subjects: [nguVan, tinHoc] },
-    { name: "11A2", gradeLevel: 11, names: NAMES_11A2, subjects: [tinHoc] },
-  ];
-
-  for (const c of classes) {
+  for (const [name, rows] of [["12A1", CLASS_12A1], ["10A1", CLASS_10A1]] as const) {
     const cls = await prisma.class.create({
       data: {
-        name: c.name,
-        gradeLevel: c.gradeLevel,
-        schoolYear: "2026-2027",
-        schoolId: school.id,
-        ownerId: teacherId,
-        isSample: true,
-        description: "Lớp mẫu để kiểm thử",
-        subjects: { create: c.subjects.map((s) => ({ subjectId: s.id, teacherId })) },
+        ownerId: user.id, name, schoolYear: "2026-2027", isSample: true,
         students: {
-          create: c.names.map((fullName, i) => ({
-            fullName,
-            studentCode: `${c.name}-${String(i + 1).padStart(2, "0")}`,
-            profileStatus: STATUS_CYCLE[i % STATUS_CYCLE.length],
-            isSample: true,
+          create: rows.map(([fullName, interests, strengths, needs], i) => ({
+            fullName, studentCode: `${name}-${String(i + 1).padStart(2, "0")}`, isSample: true,
+            traits: {
+              create: [
+                ...interests.map((label) => ({ kind: "INTEREST" as const, label })),
+                ...strengths.map((label) => ({ kind: "STRENGTH" as const, label })),
+                ...needs.map((label) => ({ kind: "NEED" as const, label })),
+              ],
+            },
           })),
         },
       },
       include: { students: true },
     });
 
-    // Ví dụ hồ sơ đa chiều: thế mạnh sáng tạo + nhu cầu hỗ trợ kỹ năng viết (Phần 4.1)
-    const s = cls.students[0];
-    await prisma.studentInterest.create({ data: { studentId: s.id, title: "Yêu thích sáng tạo văn học", origin: "TEACHER" } });
-    await prisma.studentStrength.create({ data: { studentId: s.id, title: "Khả năng tưởng tượng tốt, có ý tưởng sáng tác độc đáo", origin: "TEACHER" } });
-    await prisma.studentLearningNeed.create({
-      data: { studentId: s.id, title: "Kỹ năng viết và trình bày còn hạn chế", supportStrategy: "Cung cấp dàn ý mẫu, hướng dẫn từng bước", origin: "TEACHER" },
-    });
+    if (name === "12A1") {
+      const byName = new Map(cls.students.map((s) => [s.fullName, s.id]));
+      const groups = suggestGroups(
+        rows.map(([fullName, interests, strengths, needs]) => ({ id: byName.get(fullName)!, fullName, interests, strengths, needs })),
+        5, "MIXED", 42,
+      );
+      const tasks = [
+        "Phân tích hình tượng người lính Tây Tiến",
+        "Vẽ sơ đồ tư duy về bút pháp lãng mạn",
+        "Đọc diễn cảm và thuyết trình đoạn thơ yêu thích",
+        "Tìm hiểu hoàn cảnh sáng tác, làm video ngắn giới thiệu",
+        "Viết đoạn văn cảm nhận và chia sẻ trước lớp",
+      ];
+      await prisma.grouping.create({
+        data: {
+          classId: cls.id, title: "Bài 2 – Tây Tiến: thảo luận nhóm", method: "MIXED", isSample: true,
+          groups: {
+            create: groups.map((g, i) => ({
+              name: g.name, task: tasks[i] ?? null, sortOrder: i,
+              members: { create: g.members.map((m) => ({ studentId: m.studentId, reason: m.reason })) },
+            })),
+          },
+        },
+      });
+    }
   }
-
-  const cls10 = await prisma.class.findFirstOrThrow({
-    where: { ownerId: teacherId, name: "10A1", isSample: true },
-    include: { students: { orderBy: { studentCode: "asc" } } },
-  });
-
-  // Minh chứng mẫu dạng văn bản (nhận xét quan sát) — tiêu đề có ghi "(mẫu)"
-  const [an, chau, huy] = cls10.students;
-  const notes = [
-    { title: "Nhận xét giờ viết sáng tạo tuần 3 (mẫu)", students: [an], text: `${an.fullName} có nhiều ý tưởng sáng tác độc đáo, cốt truyện mới lạ; bài viết còn thiếu bố cục và lỗi diễn đạt.` },
-    { title: "Quan sát thảo luận nhóm (mẫu)", students: [chau, huy], text: `${chau.fullName} điều phối nhóm tốt, phân công rõ ràng. ${huy.fullName} trình bày tự tin nhưng cần thêm thời gian chuẩn bị.` },
-  ];
-  for (const n of notes) {
-    await prisma.studentEvidence.create({
-      data: {
-        classId: cls10.id, subjectId: nguVan.id, uploadedById: teacherId, type: "OBSERVATION_NOTE", source: "FREE_TEXT_NOTE",
-        title: n.title, textContent: n.text, processingStatus: "EXTRACTED", extractedAt: new Date(),
-        extractedData: { studentMatches: [], matcher: "seed" },
-        students: { create: n.students.map((st) => ({ studentId: st.id })) },
-      },
-    });
-  }
-  await prisma.lessonPlan.createMany({
-    data: [
-      { teacherId, classId: cls10.id, subjectId: nguVan.id, title: "Sáng tạo sản phẩm truyền thông từ tác phẩm văn học", topic: "Văn bản thông tin", durationMinutes: 90, status: "GENERATED", wizardStep: 6, isSample: true },
-      { teacherId, classId: cls10.id, subjectId: tinHoc.id, title: "Lập trình Python: Cấu trúc rẽ nhánh", topic: "Lập trình cơ bản", durationMinutes: 45, status: "DRAFT", wizardStep: 2, isSample: true },
-    ],
-  });
-
-  console.log("✔ Đã tạo dữ liệu mẫu. Đăng nhập: giaovien@demo.vn / Demo@1234 (admin: admin@demo.vn / Demo@1234)");
+  console.log("✔ Dữ liệu mẫu đã sẵn sàng. Đăng nhập: giaovien@demo.vn / Demo@1234");
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+main().catch((e) => { console.error(e); process.exit(1); }).finally(() => prisma.$disconnect());
