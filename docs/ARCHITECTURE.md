@@ -71,8 +71,8 @@ src/
 | `/students` (+ dialog import) | Quản lý học sinh, import Excel | 2 ✅ |
 | `/profiles`, `/profiles/[studentId]` | Hồ sơ học sinh (9 tab) | 2 ✅ → 4 (AI) |
 | `/frameworks`, `/frameworks/[id]` | Thiết lập khung thông tin A–F | 2 ✅ |
-| `/data-intake` | Tiếp nhận dữ liệu (upload + nhập văn bản) | 3 |
-| `/evidence` | Quản lý minh chứng | 3 |
+| `/data-intake` | Tiếp nhận dữ liệu (upload + nhập văn bản) | 3 ✅ |
+| `/evidence`, `/evidence/[id]` | Quản lý minh chứng, xem trước, phân loại | 3 ✅ |
 | `/analysis`, `/analysis/[studentId]` | Phân tích AI & xác nhận | 4 |
 | `/lesson-plans/new` → `/lesson-plans/[id]/wizard?step=1..6` | Wizard KHBD | 5–6 |
 | `/lesson-plans`, `/lesson-plans/[id]` | Quản lý KHBD, phiên bản, xuất | 6 |
@@ -112,7 +112,9 @@ Quy tắc dữ liệu: chỉ mục có `reviewStatus ∈ {CONFIRMED, EDITED}` đ
 | GET/POST | `/api/classes/:id/students` · PATCH/DELETE `/api/students/:id` | CRUD học sinh || 2 ✅ |
 | POST | `/api/classes/:id/students/import` | Import Excel/CSV (preview → commit) || 2 ✅ |
 | GET/POST/PATCH | `/api/frameworks`, `/api/frameworks/:id/criteria` | Khung & tiêu chí || 2 ✅ |
-| POST | `/api/evidence` (multipart) · GET `/api/evidence?classId&studentId` · GET `/api/evidence/:id/file` | Minh chứng | 3 |
+| POST | `/api/evidence` (multipart) · GET `/api/evidence?q&classId&studentId&type&status&page` | Tải tệp / danh sách minh chứng | 3 ✅ |
+| POST | `/api/evidence/note` | Nhập văn bản tự do | 3 ✅ |
+| GET/PATCH/DELETE | `/api/evidence/:id` · GET `/api/evidence/:id/file` · POST `/api/evidence/:id/extract` | Chi tiết, phân loại, tệp, trích xuất lại | 3 ✅ |
 | POST | `/api/students/:id/observations` · DELETE `/api/observations/:id` | Nhận xét quan sát | 2 ✅ |
 | POST | `/api/students/:id/analyze` | Chạy phân tích AI | 4 |
 | POST | `/api/recommendations/:id/decision` | Đồng ý/sửa/từ chối/phân tích lại | 4 |
@@ -162,5 +164,5 @@ service nghiệp vụ ──► runAITask(taskDef, input)
 - Mật khẩu bcrypt (cost 12); phiên JWT HS256 trong cookie `httpOnly`, `sameSite=lax`, `secure` khi production, hết hạn 8 giờ.
 - Phân quyền theo vai trò (ADMIN, SCHOOL_MANAGER, TEACHER) + theo quyền sở hữu dữ liệu.
 - Ghi `AuditLog` cho đăng nhập/đăng ký/đăng xuất (mở rộng cho mọi thao tác ghi từ Sprint 2).
-- Upload (Sprint 3): whitelist MIME + kiểm tra magic bytes, giới hạn dung lượng, tên file lưu ngẫu nhiên, phục vụ file qua route có kiểm tra quyền.
+- Upload: xác định loại bằng magic bytes (không tin Content-Type/phần mở rộng), giới hạn 10 MB × 10 tệp, khóa lưu trữ UUID, chống path traversal, tệp chỉ đọc được qua route kiểm tra quyền sở hữu (`nosniff`, `no-store`).
 - Hạn chế đã biết: phiên JWT stateless — đăng xuất xóa cookie nhưng token đã lộ vẫn hợp lệ tới khi hết hạn. Kế hoạch Sprint 7: thêm bảng phiên/thu hồi token và rate-limit đăng nhập.

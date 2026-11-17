@@ -107,7 +107,27 @@ async function main() {
     });
   }
 
-  const cls10 = await prisma.class.findFirstOrThrow({ where: { ownerId: teacherId, name: "10A1", isSample: true } });
+  const cls10 = await prisma.class.findFirstOrThrow({
+    where: { ownerId: teacherId, name: "10A1", isSample: true },
+    include: { students: { orderBy: { studentCode: "asc" } } },
+  });
+
+  // Minh chứng mẫu dạng văn bản (nhận xét quan sát) — tiêu đề có ghi "(mẫu)"
+  const [an, chau, huy] = cls10.students;
+  const notes = [
+    { title: "Nhận xét giờ viết sáng tạo tuần 3 (mẫu)", students: [an], text: `${an.fullName} có nhiều ý tưởng sáng tác độc đáo, cốt truyện mới lạ; bài viết còn thiếu bố cục và lỗi diễn đạt.` },
+    { title: "Quan sát thảo luận nhóm (mẫu)", students: [chau, huy], text: `${chau.fullName} điều phối nhóm tốt, phân công rõ ràng. ${huy.fullName} trình bày tự tin nhưng cần thêm thời gian chuẩn bị.` },
+  ];
+  for (const n of notes) {
+    await prisma.studentEvidence.create({
+      data: {
+        classId: cls10.id, subjectId: nguVan.id, uploadedById: teacherId, type: "OBSERVATION_NOTE", source: "FREE_TEXT_NOTE",
+        title: n.title, textContent: n.text, processingStatus: "EXTRACTED", extractedAt: new Date(),
+        extractedData: { studentMatches: [], matcher: "seed" },
+        students: { create: n.students.map((st) => ({ studentId: st.id })) },
+      },
+    });
+  }
   await prisma.lessonPlan.createMany({
     data: [
       { teacherId, classId: cls10.id, subjectId: nguVan.id, title: "Sáng tạo sản phẩm truyền thông từ tác phẩm văn học", topic: "Văn bản thông tin", durationMinutes: 90, status: "GENERATED", wizardStep: 6, isSample: true },

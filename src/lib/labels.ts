@@ -68,4 +68,6 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   "observation.delete": "Xóa nhận xét",
   "academic-result.create": "Thêm kết quả học tập",
   "academic-result.delete": "Xóa kết quả học tập",
+  "evidence.attach": "Gắn minh chứng",
+  "evidence.detach": "Gỡ minh chứng",
 };

@@ -36,8 +36,8 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Hồ sơ học sinh",
     items: [
       { href: "/frameworks", label: "Khung thông tin", icon: ClipboardList, description: "Thiết lập phương diện A–F và tiêu chí theo dõi, tùy chỉnh theo môn học." },
-      { href: "/data-intake", label: "Tiếp nhận dữ liệu", icon: Upload, plannedSprint: 3, description: "Nhập nhận xét, tải bảng điểm, bài kiểm tra, sản phẩm, ảnh minh chứng." },
-      { href: "/evidence", label: "Minh chứng", icon: FolderOpen, plannedSprint: 3, description: "Xem trước, phân loại, gắn minh chứng với học sinh, môn học, tiêu chí." },
+      { href: "/data-intake", label: "Tiếp nhận dữ liệu", icon: Upload, description: "Nhập nhận xét, tải bảng điểm, bài kiểm tra, sản phẩm, ảnh minh chứng." },
+      { href: "/evidence", label: "Minh chứng", icon: FolderOpen, description: "Xem trước, phân loại, gắn minh chứng với học sinh, môn học, tiêu chí." },
       { href: "/analysis", label: "Phân tích AI", icon: BrainCircuit, plannedSprint: 4, description: "AI phân tích dữ liệu; giáo viên đồng ý, chỉnh sửa, từ chối hoặc yêu cầu phân tích lại." },
       { href: "/profiles", label: "Hồ sơ học sinh", icon: UserRound, description: "Hồ sơ đa phương diện, có minh chứng và lịch sử cập nhật." },
     ],

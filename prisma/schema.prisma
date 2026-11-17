@@ -342,6 +342,9 @@ model StudentEvidence {
   extractedData    Json?
   processingStatus ProcessingStatus @default(UPLOADED)
   processingError  String?
+  checksum         String? // sha256 nội dung tệp — phát hiện tải trùng
+  extractionNote   String? // ví dụ: "Ảnh chưa được trích xuất văn bản (cần OCR/AI)"
+  extractedAt      DateTime?
   collectedAt      DateTime         @default(now()) // thời điểm thu thập minh chứng
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
@@ -361,6 +364,7 @@ model StudentEvidence {
   academicResults AcademicResult[]
 
   @@index([classId])
+  @@index([classId, checksum])
 }
 
 /// Một minh chứng có thể liên quan tới nhiều học sinh (ví dụ bảng điểm cả lớp)

@@ -120,24 +120,33 @@ export default async function StudentProfilePage({
     { value: "goals", label: "Định hướng phát triển", count: items.DEVELOPMENT_GOAL.length,
       content: list("DEVELOPMENT_GOAL", { description: "Lĩnh vực muốn phát triển, kỹ năng muốn cải thiện, hoạt động muốn thử sức, mục tiêu tương lai." }) },
     { value: "evidence", label: "Minh chứng", count: s.evidenceLinks.length,
-      content: s.evidenceLinks.length ? (
+      content: (
         <Card>
-          <CardContent className="pt-5">
-            <ul className="divide-y">
-              {s.evidenceLinks.map(({ evidence: e }) => (
-                <li key={e.id} className="flex flex-wrap items-center gap-2 py-2.5 text-sm">
-                  <span className="flex-1 font-medium">{e.title}</span>
-                  <Badge>{EVIDENCE_TYPE_LABEL[e.type]}</Badge>
-                  <span className="text-xs text-muted-foreground">{formatDate(e.collectedAt)}</span>
-                </li>
-              ))}
-            </ul>
+          <CardHeader className="flex-row items-start justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle>Minh chứng của học sinh</CardTitle>
+              <CardDescription>Bảng điểm, bài kiểm tra, sản phẩm, hình ảnh và nhận xét đã gắn với học sinh.</CardDescription>
+            </div>
+            <Button asChild size="sm" variant="secondary">
+              <Link href={`/data-intake?classId=${s.class.id}&studentId=${s.id}`}><Upload /> Thêm minh chứng</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {s.evidenceLinks.length ? (
+              <ul className="divide-y">
+                {s.evidenceLinks.map(({ evidence: e }) => (
+                  <li key={e.id} className="flex flex-wrap items-center gap-2 py-2.5 text-sm">
+                    <Link href={`/evidence/${e.id}`} className="flex-1 font-medium hover:text-primary hover:underline">{e.title}</Link>
+                    <Badge tone="primary">{EVIDENCE_TYPE_LABEL[e.type]}</Badge>
+                    <span className="text-xs text-muted-foreground">{formatDate(e.collectedAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState icon={FolderOpen} title="Chưa có minh chứng" description="Tải tệp hoặc nhập nhận xét, sau đó gắn với học sinh này." />
+            )}
           </CardContent>
         </Card>
-      ) : (
-        <EmptyState icon={FolderOpen} title="Chưa có minh chứng"
-          description="Chức năng tải bảng điểm, bài kiểm tra, sản phẩm và hình ảnh minh chứng sẽ được triển khai ở Sprint 3."
-          action={<Button asChild variant="outline" size="sm"><Link href="/data-intake"><Upload /> Tiếp nhận dữ liệu</Link></Button>} />
       ) },
     { value: "comments", label: "Nhận xét", count: s.observations.length,
       content: (

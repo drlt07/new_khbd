@@ -24,11 +24,18 @@
 - [x] Audit log cho mọi thao tác ghi; phân quyền theo quyền sở hữu (404 với dữ liệu của giáo viên khác)
 - [x] Kiểm thử: API (hợp lệ + lỗi + cô lập giữa 2 giáo viên), luồng UI bằng Playwright, mobile không tràn ngang
 
-## Sprint 3 — Tiếp nhận dữ liệu
-- Storage adapter (local ↔ S3) + upload nhiều tệp (PDF, DOCX, XLSX, CSV, PNG, JPG), kiểm tra MIME/magic bytes, giới hạn dung lượng
-- Xem trước tệp (ảnh, PDF, bảng), phân loại minh chứng, gắn HS/môn/tiêu chí, thời gian & nguồn
-- Nhập nhận xét văn bản tự do, nhận xét quan sát
-- Trạng thái xử lý; trích xuất văn bản không dùng AI (pdf-parse, mammoth, xlsx)
+## Sprint 3 — Tiếp nhận dữ liệu ✅
+- [x] Storage adapter (`src/server/storage`): local disk, khóa lưu trữ ngẫu nhiên, chống path traversal; interface sẵn sàng cho S3/R2 (chưa cài đặt driver)
+- [x] Upload nhiều tệp (≤ 10 tệp, ≤ 10 MB/tệp): PDF, DOCX, XLSX, CSV, PNG, JPG — xác định loại bằng magic bytes, đối chiếu phần mở rộng, phát hiện tệp trùng (sha256)
+- [x] Nhập văn bản tự do (nhận xét quan sát) — một văn bản có thể gắn nhiều học sinh
+- [x] Phân loại: lớp, môn học, loại minh chứng, ngày thu thập, học sinh (nhiều), tiêu chí (nhiều, theo phương diện A–F); kiểm tra mọi liên kết thuộc lớp/giáo viên
+- [x] Trích xuất KHÔNG dùng AI: PDF (unpdf), DOCX (mammoth), XLSX (exceljs), CSV; ảnh lưu để xem (OCR để Sprint 4); trạng thái UPLOADED → EXTRACTING → EXTRACTED/FAILED; trích xuất lại
+- [x] Gợi ý học sinh liên quan bằng so khớp họ tên/mã (không dấu, ranh giới từ) kèm trích đoạn — giáo viên bấm “Gắn”
+- [x] Trang Minh chứng: tìm kiếm cả trong nội dung đã trích xuất, lọc lớp/loại/trạng thái, phân trang
+- [x] Chi tiết minh chứng: xem trước ảnh / PDF / bảng / văn bản, sửa phân loại, tải về, xóa (xóa cả tệp)
+- [x] Phục vụ tệp qua route có kiểm tra quyền (`nosniff`, `no-store`, CSP cho ảnh); không có URL công khai
+- [x] Tab Minh chứng trong hồ sơ + nút “Thêm minh chứng” điền sẵn lớp/học sinh; lịch sử hồ sơ ghi gắn/gỡ minh chứng
+- [x] Kiểm thử API (7 loại tệp gồm tệp giả mạo, cô lập dữ liệu, trùng tệp) và luồng UI Playwright (desktop + mobile)
 
 ## Sprint 4 — AI phân tích hồ sơ
 - Task: Document Extraction, Student Profile Analysis, Evidence Mapping, Learning Needs Analysis
