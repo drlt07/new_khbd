@@ -187,6 +187,8 @@ model Teacher {
   lessonPlans   LessonPlan[]
   approvals     TeacherApproval[]
   versions      LessonPlanVersion[]
+  knowledgeCollections KnowledgeCollection[]
+  knowledgeDocuments   KnowledgeDocument[]
 }
 
 model Subject {
@@ -205,6 +207,7 @@ model Subject {
   academicResults AcademicResult[]
   competencies    CompetencyAssessment[]
   lessonPlans     LessonPlan[]
+  knowledgeCollections KnowledgeCollection[]
 
   @@unique([schoolId, name])
 }
@@ -811,4 +814,79 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([userId, createdAt])
+}
+
+// ───────────────────── Training: kho tài liệu tham chiếu ─────────────────────
+// Tài liệu chuyên môn (SGV, SGK, chương trình...) được trích xuất, chia đoạn và đánh chỉ mục
+// để AI TRUY XUẤT làm ngữ cảnh khi phân tích bài học / soạn KHBD (RAG).
+// Đây KHÔNG phải huấn luyện lại (fine-tune) mô hình.
+
+model KnowledgeCollection {
+  id          String   @id @default(cuid())
+  ownerId     String
+  subjectId   String?
+  name        String
+  description String?
+  gradeLevel  Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner     Teacher             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  subject   Subject?            @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  documents KnowledgeDocument[]
+  chunks    KnowledgeChunk[]
+
+  @@unique([ownerId, name])
+}
+
+model KnowledgeDocument {
+  id               String           @id @default(cuid())
+  collectionId     String
+  uploadedById     String
+  title            String
+  description      String?
+  volume           String? // "Tập 1", "Tập 2"... dùng để nối các phần của cùng một cuốn sách
+  fileName         String
+  mimeType         String
+  sizeBytes        Int
+  storageKey       String
+  checksum         String
+  pageCount        Int?
+  bookPageStart    Int? // số trang in trên sách (nếu nhận diện được)
+  bookPageEnd      Int?
+  charCount        Int?
+  chunkCount       Int              @default(0)
+  outline          Json? // [{ kind, label, title, pdfPage, bookPage }]
+  processingStatus ProcessingStatus @default(UPLOADED)
+  processingError  String?
+  processedAt      DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  collection KnowledgeCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  uploadedBy Teacher             @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  chunks     KnowledgeChunk[]
+
+  @@unique([collectionId, checksum])
+}
+
+model KnowledgeChunk {
+  id           String  @id @default(cuid())
+  documentId   String
+  collectionId String
+  chunkIndex   Int
+  pdfPage      Int
+  bookPage     Int?
+  lessonLabel  String? // "Bài 4", "Ôn tập học kì I", "Hướng dẫn chung"
+  lessonTitle  String?
+  heading      String? // "Văn bản 2: Muối của rừng", "Viết", "Nói và nghe"...
+  content      String
+  searchText   String // nội dung không dấu, chữ thường — có chỉ mục GIN full-text (xem migration)
+  charCount    Int
+
+  document   KnowledgeDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  collection KnowledgeCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([collectionId, lessonLabel])
 }

@@ -1,5 +1,5 @@
 import {
-  BarChart3, BookOpenCheck, BrainCircuit, ClipboardList, FilePlus2, FolderOpen, LayoutDashboard,
+  BarChart3, BookMarked, BookOpenCheck, BrainCircuit, ClipboardList, FilePlus2, FolderOpen, LayoutDashboard,
   Library, Settings, ShieldCheck, Upload, UserRound, Users, type LucideIcon,
 } from "lucide-react";
 import type { UserRole } from "@prisma/client";
@@ -47,6 +47,12 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/lesson-plans/new", label: "Tạo KHBD", icon: FilePlus2, plannedSprint: 5, description: "Wizard 6 bước: bài học → mục tiêu → hồ sơ lớp → nhóm & nhiệm vụ → tạo KHBD → hoàn thiện." },
       { href: "/lesson-plans", label: "Quản lý KHBD", icon: BookOpenCheck, plannedSprint: 6, description: "Danh sách KHBD, phiên bản, xuất Word/PDF." },
+    ],
+  },
+  {
+    label: "Training",
+    items: [
+      { href: "/training", label: "Kho tài liệu training", icon: BookMarked, description: "Tài liệu chuyên môn theo môn học (SGV, SGK…) để AI tham chiếu và trích dẫn khi soạn KHBD." },
     ],
   },
   {

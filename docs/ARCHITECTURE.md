@@ -76,6 +76,7 @@ src/
 | `/analysis`, `/analysis/[studentId]` | Phân tích AI & xác nhận | 4 |
 | `/lesson-plans/new` → `/lesson-plans/[id]/wizard?step=1..6` | Wizard KHBD | 5–6 |
 | `/lesson-plans`, `/lesson-plans/[id]` | Quản lý KHBD, phiên bản, xuất | 6 |
+| `/training`, `/training/[id]`, `/training/documents/[id]` | Training – kho tài liệu chuyên môn theo môn (RAG) | ✅ (bổ sung) |
 | `/audit`, `/admin/users` | Nhật ký, tài khoản & phân quyền | 7 |
 
 Các trang chưa triển khai hiển thị **trang giữ chỗ trung thực** (ghi rõ sprint dự kiến), không có nút/dữ liệu giả.
@@ -119,6 +120,10 @@ Quy tắc dữ liệu: chỉ mục có `reviewStatus ∈ {CONFIRMED, EDITED}` đ
 | POST | `/api/students/:id/analyze` | Chạy phân tích AI | 4 |
 | POST | `/api/recommendations/:id/decision` | Đồng ý/sửa/từ chối/phân tích lại | 4 |
 | GET | `/api/students/:id/profile` | Hồ sơ tổng hợp | 4 |
+| GET/POST | `/api/training/collections` · GET/PATCH/DELETE `/api/training/collections/:id` | Bộ tài liệu training theo môn | ✅ |
+| POST | `/api/training/collections/:id/documents` (multipart) | Tải tài liệu PDF/DOCX → trích xuất, chia đoạn, đánh chỉ mục | ✅ |
+| GET | `/api/training/collections/:id/search?q&lesson&limit` | Truy xuất đoạn tài liệu kèm trích dẫn | ✅ |
+| GET/PATCH/DELETE | `/api/training/documents/:id` · `/chunks` · `/file` · POST `/reprocess` | Quản lý tài liệu | ✅ |
 | POST/PATCH | `/api/lesson-plans`, `/api/lesson-plans/:id` | Wizard KHBD (lưu từng bước) | 5 |
 | POST | `/api/lesson-plans/:id/analyze` · `/groups/suggest` · `/tasks/suggest` | AI bài học/nhóm/nhiệm vụ | 5 |
 | CRUD | `/api/lesson-plans/:id/groups`, `/groups/:gid/members` | Nhóm & thành viên | 5 |
@@ -144,6 +149,21 @@ service nghiệp vụ ──► runAITask(taskDef, input)
 - `anonymize.ts`: thay tên HS bằng mã tạm (HS01…), bỏ ngày sinh/giới tính trước khi gửi prompt; ánh xạ ngược chỉ ở bộ nhớ server.
 - Đổi model qua `AI_MODEL`; thêm provider mới bằng cách triển khai interface `AIProvider`.
 - **Mock không giả vờ là AI thật:** badge “AI: chế độ mô phỏng” trên header, cờ `isMock` trong DB.
+
+### 7.1. Training – kho tài liệu tham chiếu (RAG)
+
+```
+PDF/DOCX ─► trích văn bản THEO TRANG (unpdf / mammoth)
+         ─► nhận diện cấu trúc: số trang in, "Bài N" + tiêu đề, "Ôn tập học kì", "Văn bản N", Đọc/Viết/Nói và nghe…, trang mục lục
+         ─► nối các phần của cùng một cuốn (cùng "Tập", trang liền kề) để kế thừa bài học khi tệp bắt đầu giữa bài
+         ─► chia đoạn ~1.200 ký tự, không vượt trang (trích dẫn chính xác), gắn bài + đề mục
+         ─► KnowledgeChunk.searchText (không dấu) + chỉ mục GIN to_tsvector('simple')
+truy vấn ─► AND (đủ từ) + cộng điểm cụm từ liền nhau, bổ sung OR; hạ điểm trang mục lục
+         ─► retrieveReferenceContext(subjectId, query) → [{ citation: "SGV…, tr. 52 (Bài 2)", content }]
+```
+- Đây là cơ chế **truy xuất ngữ cảnh**, không fine-tune mô hình. Sprint 5–6: Phân tích bài học / Tạo KHBD sẽ đưa các đoạn truy xuất vào prompt và bắt buộc trích dẫn nguồn.
+- Khi có API key: có thể bổ sung embedding (pgvector) để tìm theo ngữ nghĩa, giữ full-text làm phương án song song.
+- Tài liệu (có thể có bản quyền) chỉ chủ sở hữu xem được; tệp gốc không đưa vào git (`/storage`).
 
 ## 8. Thiết kế giao diện
 

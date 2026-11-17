@@ -37,6 +37,14 @@
 - [x] Tab Minh chứng trong hồ sơ + nút “Thêm minh chứng” điền sẵn lớp/học sinh; lịch sử hồ sơ ghi gắn/gỡ minh chứng
 - [x] Kiểm thử API (7 loại tệp gồm tệp giả mạo, cô lập dữ liệu, trùng tệp) và luồng UI Playwright (desktop + mobile)
 
+## Bổ sung — Training: kho tài liệu chuyên môn theo môn ✅
+- [x] Mục menu “Training” → “Kho tài liệu training”, mục con theo từng bộ tài liệu (ví dụ “Ngữ văn 12”)
+- [x] Bộ tài liệu theo môn/khối; tải PDF/DOCX (≤ 50 MB/tệp), chống trùng, xử lý lại, xóa
+- [x] Trích xuất theo trang, nhận diện bài học/đề mục/trang in, nối các phần của cùng một tập (kể cả khi tải không theo thứ tự)
+- [x] Tìm kiếm full-text không dấu có trích dẫn (tài liệu, tập, trang, bài, đề mục); lọc theo bài; hạ điểm trang mục lục
+- [x] Hàm `retrieveReferenceContext` sẵn sàng cho AI phân tích bài học / soạn KHBD (Sprint 5–6)
+- [x] Đã nạp bộ “Ngữ văn 12 – SGV Kết nối tri thức”: 4 tệp, 256 trang, 712 đoạn, nhận diện Bài 1–9 + Ôn tập HK I/II
+
 ## Sprint 4 — AI phân tích hồ sơ
 - Task: Document Extraction, Student Profile Analysis, Evidence Mapping, Learning Needs Analysis
 - Lưu AIAnalysis/AIRecommendation; màn hình phân tích 3 cột

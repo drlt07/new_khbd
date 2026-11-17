@@ -7,20 +7,24 @@ import { SidebarNav } from "./sidebar-nav";
 import { UserMenu } from "./user-menu";
 import { Badge } from "@/components/ui/badge";
 
+export type SubNavLink = { href: string; label: string; title?: string };
+
 export function AppShell({
   user,
   aiMode,
+  trainingLinks = [],
   children,
 }: {
   user: { name: string; email: string; role: UserRole };
   aiMode: { isMock: boolean; provider: string };
+  trainingLinks?: SubNavLink[];
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="min-h-screen lg:pl-64">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-card lg:block">
-        <SidebarNav role={user.role} />
+        <SidebarNav role={user.role} subLinks={{ "/training": trainingLinks }} />
       </aside>
 
       <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-card/90 px-4 backdrop-blur sm:px-6">
@@ -30,7 +34,7 @@ export function AppShell({
           </SheetTrigger>
           <SheetContent aria-describedby={undefined}>
             <SheetTitle className="sr-only">Menu điều hướng</SheetTitle>
-            <SidebarNav role={user.role} onNavigate={() => setOpen(false)} />
+            <SidebarNav role={user.role} subLinks={{ "/training": trainingLinks }} onNavigate={() => setOpen(false)} />
           </SheetContent>
         </Sheet>
         <div className="flex-1" />

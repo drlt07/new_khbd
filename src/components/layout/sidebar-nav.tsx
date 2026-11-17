@@ -6,11 +6,15 @@ import type { UserRole } from "@prisma/client";
 import { NAV_GROUPS } from "@/config/navigation";
 import { cn } from "@/lib/utils";
 
-export function SidebarNav({ role, onNavigate }: { role: UserRole; onNavigate?: () => void }) {
+export function SidebarNav({
+  role, onNavigate, subLinks = {},
+}: { role: UserRole; onNavigate?: () => void; subLinks?: Record<string, { href: string; label: string; title?: string }[]> }) {
   const pathname = usePathname();
   const isActive = (href: string) =>
-    pathname === href || (href !== "/lesson-plans" && pathname.startsWith(`${href}/`)) ||
-    (href === "/lesson-plans" && pathname.startsWith("/lesson-plans/") && !pathname.startsWith("/lesson-plans/new"));
+    (pathname === href || (href !== "/lesson-plans" && pathname.startsWith(`${href}/`)) ||
+    (href === "/lesson-plans" && pathname.startsWith("/lesson-plans/") && !pathname.startsWith("/lesson-plans/new"))) &&
+    // Mục cha không sáng khi đang ở một mục con
+    !(subLinks[href] ?? []).some((l) => pathname === l.href);
 
   return (
     <div className="flex h-full flex-col">
@@ -52,6 +56,29 @@ export function SidebarNav({ role, onNavigate }: { role: UserRole; onNavigate?: 
                           </span>
                         )}
                       </Link>
+                      {(subLinks[item.href] ?? []).length > 0 && (
+                        <ul className="ml-4 mt-0.5 space-y-0.5 border-l pl-2">
+                          {subLinks[item.href].map((l) => {
+                            const subActive = pathname === l.href || pathname.startsWith(`${l.href}/`);
+                            return (
+                              <li key={l.href}>
+                                <Link
+                                  href={l.href}
+                                  onClick={onNavigate}
+                                  title={l.title}
+                                  aria-current={subActive ? "page" : undefined}
+                                  className={cn(
+                                    "block truncate rounded-md px-2 py-1 text-sm transition-colors",
+                                    subActive ? "bg-primary-soft font-medium text-primary" : "text-slate-600 hover:bg-muted hover:text-foreground",
+                                  )}
+                                >
+                                  {l.label}
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
                     </li>
                   );
                 })}
