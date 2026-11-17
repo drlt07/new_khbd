@@ -14,9 +14,9 @@ export const PHASE_LABEL: Record<Phase, string> = {
 };
 export const PHASES: Phase[] = ["OPENING", "KNOWLEDGE", "PRACTICE", "APPLICATION"];
 
-export type TemplateGroup = { id: string; name: string; profile: string | null; keywords: string[]; scoreMin: number | null; scoreMax: number | null; forSupport: boolean };
+export type TemplateGroup = { id: string; name: string; profile: string | null; keywords: string[]; scoreMin: number | null; scoreMax: number | null; forSupport: boolean; avgScore?: number | null; competency?: string | null };
 export type TemplateLesson = { subject: string; title: string; periods: number; requirements: string | null };
-export type DraftTask = { groupId: string; task: string; product: string | null; support: string | null };
+export type DraftTask = { groupId: string; task: string; product: string | null; support: string | null; materials: string | null; challenge: string | null; assessment: string | null };
 export type DraftActivity = {
   phase: Phase; title: string; minutes: number | null; goal: string | null; content: string | null;
   product: string | null; organization: string | null; byGroup: boolean; tasks: DraftTask[];
@@ -34,8 +34,8 @@ const STYLE_KEYWORDS: [Style, string[]][] = [
 
 /** Phân loại phong cách nhóm từ đặc trưng GV đã đặt */
 export function groupStyle(g: TemplateGroup): Style {
-  if (g.forSupport || (g.scoreMax != null && g.scoreMax <= 6.5 && g.scoreMin == null)) return "support";
-  if (g.scoreMin != null && g.scoreMin >= 8) return "advanced";
+  if (g.forSupport || (g.scoreMax != null && g.scoreMax <= 6.5 && g.scoreMin == null) || (g.avgScore != null && g.avgScore < 5.5)) return "support";
+  if ((g.scoreMin != null && g.scoreMin >= 8) || (g.avgScore != null && g.avgScore >= 8 && !g.keywords.length)) return "advanced";
   const text = [...g.keywords, g.name, g.profile ?? ""];
   let best: Style = "general", bestHits = 0;
   for (const [style, kws] of STYLE_KEYWORDS) {
@@ -43,7 +43,7 @@ export function groupStyle(g: TemplateGroup): Style {
     if (hits > bestHits) { best = style; bestHits = hits; }
   }
   // Nhóm chỉ đặt khoảng điểm ở mức giữa (không có từ khóa thế mạnh) -> luyện có định hướng
-  if (best === "general" && (g.scoreMin != null || g.scoreMax != null)) return "developing";
+  if (best === "general" && (g.scoreMin != null || g.scoreMax != null || g.avgScore != null)) return "developing";
   return best;
 }
 
@@ -98,14 +98,83 @@ const ORG = (who: string) =>
 
 const firstRequirement = (r: string | null) => r?.split(/\n+/).map((x) => x.replace(/^[-•\d.)\s]+/, "").trim()).find(Boolean) ?? "yêu cầu cần đạt của bài";
 
+export const CHALLENGE: Record<Style, string> = {
+  support: "Cơ bản — có gợi ý từng bước", developing: "Vận dụng — có định hướng", advanced: "Mở rộng — sáng tạo, phản biện",
+  creative: "Vận dụng theo thế mạnh sáng tạo", analytic: "Vận dụng — phân tích sâu", communication: "Vận dụng — trình bày, tương tác",
+  design: "Vận dụng — trực quan hóa", technical: "Vận dụng — công nghệ", general: "Vận dụng theo đặc trưng nhóm",
+};
+
+const MATERIALS: Record<Style, string> = {
+  support: "Phiếu học tập từng bước, ví dụ mẫu, bảng từ khóa", developing: "Phiếu câu hỏi phân bậc, đáp án/tiêu chí tự kiểm tra",
+  advanced: "Tài liệu mở rộng, câu hỏi phản biện, rubric tự đánh giá", creative: "Phiếu gợi mở cảm nhận, ngữ liệu tham khảo",
+  analytic: "Khung bảng/sơ đồ phân tích", communication: "Dàn ý thuyết trình mẫu, tiêu chí trình bày",
+  design: "Mẫu bố cục sơ đồ/infographic, giấy A0", technical: "Thiết bị số, hướng dẫn công cụ", general: "Phiếu học tập nhóm",
+};
+
 export function suggestTask(phase: Exclude<Phase, "OPENING">, lesson: TemplateLesson, g: TemplateGroup): DraftTask {
   const style = groupStyle(g);
   const f = FRAMES[phase][style];
-  const fill = (s: string) => s.replaceAll("{B}", lesson.title).replaceAll("{Y}", firstRequirement(lesson.requirements));
+  const Y = firstRequirement(lesson.requirements);
+  const fill = (s: string) => s.replaceAll("{B}", lesson.title).replaceAll("{Y}", Y);
   let task = fill(f.task);
   if (style === "general" && g.profile) task += ` (Phù hợp đặc trưng nhóm: ${g.profile})`;
-  return { groupId: g.id, task, product: fill(f.product), support: fill(f.support) };
+  return {
+    groupId: g.id, task, product: fill(f.product), support: fill(f.support), materials: MATERIALS[style], challenge: CHALLENGE[style],
+    assessment: `Sản phẩm đáp ứng yêu cầu: ${Y}${style === "support" ? "; ghi nhận tiến bộ so với lần trước" : style === "advanced" ? "; có ý tưởng mới hoặc lập luận phản biện" : "; trình bày rõ, có dẫn chứng"}.`,
+  };
 }
+
+// ─────────────── Trợ lý KHBD — phiên bản quy tắc ───────────────
+
+/** Điều chỉnh độ khó một nhiệm vụ (dễ hơn: thêm khung hỗ trợ; khó hơn: thêm yêu cầu mở rộng) */
+export function adjustTaskRules(t: DraftTask, direction: "easier" | "harder"): DraftTask {
+  const strip = (s: string) => s.replace(/^Thực hiện theo 3 bước gợi ý[^:]*: /, "").replace(/ Mở rộng: .*$/, "");
+  if (direction === "easier")
+    return { ...t, task: `Thực hiện theo 3 bước gợi ý (đọc ví dụ mẫu → làm theo khung → tự kiểm tra): ${strip(t.task)}`, challenge: "Cơ bản — có gợi ý từng bước", support: [t.support, "GV/bạn hỗ trợ trực tiếp; thêm thời gian"].filter(Boolean).join("; ") };
+  return { ...t, task: `${strip(t.task)} Mở rộng: đề xuất thêm một cách làm khác hoặc đánh giá, phản biện kết quả của nhóm bạn.`, challenge: "Mở rộng — sáng tạo, phản biện", support: "Ít gợi ý; tự đánh giá theo rubric" };
+}
+
+/** Tạo khung phiếu học tập cho một nhiệm vụ nhóm */
+export function createMaterialRules(lesson: TemplateLesson, g: TemplateGroup, t: DraftTask): string {
+  const style = groupStyle(g);
+  const qs = style === "support"
+    ? ["Câu 1 (nhận biết): Tìm và gạch chân các chi tiết/thông tin chính. Gợi ý: …", "Câu 2 (hiểu): Hoàn thành câu: “Chi tiết … cho thấy …”", "Câu 3 (vận dụng): Làm theo ví dụ mẫu với một trường hợp tương tự"]
+    : style === "advanced"
+      ? ["Câu 1: Phân tích và so sánh với một nội dung/văn bản khác", "Câu 2: Đặt 2 câu hỏi phản biện và tự trả lời", "Câu 3: Đề xuất sản phẩm/cách giải quyết mới, nêu căn cứ"]
+      : ["Câu 1: Xác định nội dung trọng tâm (có dẫn chứng)", "Câu 2: Phân tích/giải thích một khía cạnh nổi bật", "Câu 3: Vận dụng vào một tình huống cụ thể"];
+  return [`PHIẾU HỌC TẬP — ${g.name.toUpperCase()}`, `Bài: ${lesson.title}`, `Nhiệm vụ: ${t.task}`, "", ...qs, "",
+    `Sản phẩm cần nộp: ${t.product ?? "—"}`, `Tự đánh giá: ☐ Hoàn thành đủ yêu cầu  ☐ Có dẫn chứng  ☐ Trình bày rõ ràng`].join("\n");
+}
+
+export type LessonCheck = { level: "ok" | "warning" | "error"; message: string; target?: string };
+
+/** Kiểm tra mục tiêu & tính nhất quán của KHBD (luôn dùng quy tắc — kết quả xác định) */
+export function checkLesson(l: { periods: number; requirements: string | null; knowledgeGoals: string | null; competencyGoals: string | null; qualityGoals: string | null; assessment: string | null;
+  activities: { key?: string; title: string; minutes: number | null; goal: string | null; content: string | null; organization: string | null; byGroup: boolean; tasks: { groupId: string; task: string; assessment?: string | null }[] }[] }, groups: { id: string; name: string }[]): LessonCheck[] {
+  const out: LessonCheck[] = [];
+  const total = l.activities.reduce((a, x) => a + (x.minutes ?? 0), 0);
+  out.push(total === l.periods * 45 ? { level: "ok", message: `Thời lượng khớp ${l.periods} tiết (${total} phút)` } : { level: "warning", message: `Tổng thời lượng ${total} phút ≠ ${l.periods * 45} phút của ${l.periods} tiết` });
+  const reqs = (l.requirements ?? "").split(/\n+/).map((x) => x.trim()).filter(Boolean);
+  if (!reqs.length) out.push({ level: "error", message: "Chưa có yêu cầu cần đạt", target: "objectives" });
+  const corpus = normalize(l.activities.map((a) => [a.goal, a.content, ...a.tasks.map((t) => t.task)].join(" ")).join(" "));
+  for (const r of reqs) {
+    const words = normalize(r).split(" ").filter((w) => w.length >= 4);
+    const hit = words.filter((w) => corpus.includes(w)).length;
+    out.push(words.length && hit / words.length >= 0.4 ? { level: "ok", message: `Có hoạt động hướng tới: “${r}”` } : { level: "warning", message: `Chưa thấy hoạt động nào nhắc rõ tới yêu cầu: “${r}”`, target: "objectives" });
+  }
+  for (const [k, v] of [["Kiến thức", l.knowledgeGoals], ["Năng lực", l.competencyGoals], ["Phẩm chất", l.qualityGoals]] as const)
+    if (!v?.trim()) out.push({ level: "warning", message: `Mục tiêu ${k} còn trống`, target: "objectives" });
+  l.activities.forEach((a) => {
+    if (a.byGroup) {
+      const missing = groups.filter((g) => !a.tasks.some((t) => t.groupId === g.id && t.task.trim()));
+      if (missing.length) out.push({ level: "error", message: `${a.title}: chưa có nhiệm vụ cho ${missing.map((m) => m.name).join(", ")}`, target: a.key });
+    }
+    if (!/bước 4|kết luận/i.test(a.organization ?? "")) out.push({ level: "warning", message: `${a.title}: tổ chức thực hiện chưa đủ 4 bước (CV 5512)`, target: a.key });
+  });
+  if (!l.assessment?.trim()) out.push({ level: "warning", message: "Mục IV. Đánh giá còn trống", target: "assessment" });
+  return out;
+}
+const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/[^a-z0-9 ]/g, " ");
 
 export function buildLessonDraft(lesson: TemplateLesson, groups: TemplateGroup[]): DraftActivity[] {
   const total = lesson.periods * 45;

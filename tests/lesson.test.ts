@@ -3,7 +3,9 @@ import { test } from "node:test";
 import { buildLessonDraft, groupStyle } from "../src/lib/lesson/template";
 import { GROUP_PRESETS } from "../src/lib/grouping/presets";
 
-const groups = GROUP_PRESETS[0].groups.map((g, i) => ({ ...g, id: "g" + i }));
+import { effectiveCriteria } from "../src/lib/grouping/interpret";
+const nv = GROUP_PRESETS.find((p) => p.id === "ngu-van")!.groups;
+const groups = effectiveCriteria(nv, [], []).map((g, i) => ({ ...g, id: "g" + i, profile: nv[i].description }));
 
 test("nhận diện phong cách nhóm từ đặc trưng GV đặt", () => {
   assert.deepEqual(groups.map(groupStyle), ["creative", "analytic", "communication", "support"]);

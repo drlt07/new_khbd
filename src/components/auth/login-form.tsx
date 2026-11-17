@@ -18,7 +18,7 @@ export function LoginForm() {
     const res = await submit({ email: fd.get("email"), password: fd.get("password") });
     if (res) {
       const next = params.get("next");
-      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/groups");
+      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
       router.refresh();
     }
   }

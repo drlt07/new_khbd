@@ -15,18 +15,6 @@ export async function assertStudentOwner(userId: string, studentId: string) {
   return s;
 }
 
-export async function assertGroupingOwner(userId: string, groupingId: string) {
-  const g = await prisma.grouping.findFirst({ where: { id: groupingId, class: { ownerId: userId } } });
-  if (!g) throw new ApiError(404, "Không tìm thấy bộ nhóm");
-  return g;
-}
-
-export async function assertLessonOwner(userId: string, lessonId: string) {
-  const l = await prisma.lessonPlan.findFirst({ where: { id: lessonId, grouping: { class: { ownerId: userId } } }, include: { grouping: true } });
-  if (!l) throw new ApiError(404, "Không tìm thấy kế hoạch bài dạy");
-  return l;
-}
-
 export async function assertSheetInClass(classId: string, sheetId: string | null | undefined) {
   if (!sheetId) return;
   const ok = await prisma.scoreSheet.count({ where: { id: sheetId, classId } });

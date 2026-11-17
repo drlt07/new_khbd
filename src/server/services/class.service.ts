@@ -36,19 +36,28 @@ export async function deleteClass(userId: string, id: string) {
   await prisma.class.delete({ where: { id } });
 }
 
-/** Tiến độ 2 pha của một lớp — dùng cho tab Tổng quan và thanh tab */
-export async function getClassProgress(userId: string, classId: string) {
+/** Không gian làm việc của một lớp: dữ liệu học sinh, các bộ nhóm (theo phiên bản), KHBD, lịch sử */
+export async function getClassWorkspace(userId: string, classId: string) {
   const cls = await prisma.class.findFirst({ where: { id: classId, ownerId: userId } });
   if (!cls) return null;
-  const [students, withTraits, sheets, groupings, lessons, latestGrouping, latestLesson] = await Promise.all([
+  const [students, withTraits, sheets, sessions, lessons, logs] = await Promise.all([
     prisma.student.count({ where: { classId } }),
     prisma.student.count({ where: { classId, traits: { some: {} } } }),
-    prisma.scoreSheet.count({ where: { classId } }),
-    prisma.grouping.count({ where: { classId } }),
-    prisma.lessonPlan.count({ where: { grouping: { classId } } }),
-    prisma.grouping.findFirst({ where: { classId }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true, _count: { select: { groups: true } } } }),
-    prisma.lessonPlan.findFirst({ where: { grouping: { classId } }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true } }),
+    prisma.scoreSheet.findMany({ where: { classId }, orderBy: { createdAt: "desc" }, select: { id: true, subject: true, fileName: true, createdAt: true } }),
+    prisma.groupingSession.findMany({
+      where: { classId }, orderBy: [{ updatedAt: "desc" }],
+      select: { id: true, lineageId: true, title: true, version: true, status: true, step: true, updatedAt: true, groups: { select: { name: true, _count: { select: { members: true } } }, orderBy: { sortOrder: "asc" } }, _count: { select: { lessonPlans: true } } },
+    }),
+    prisma.lessonPlan.findMany({ where: { session: { classId } }, orderBy: { updatedAt: "desc" }, select: { id: true, title: true, subject: true, status: true, updatedAt: true, session: { select: { title: true, version: true, status: true } } } }),
+    prisma.activityLog.findMany({ where: { classId, userId }, orderBy: { createdAt: "desc" }, take: 12 }),
   ]);
-  return { cls, students, withTraits, sheets, groupings, lessons, latestGrouping, latestLesson };
+  // Gom phiên theo bộ nhóm (lineage): hiển thị phiên đáng chú ý nhất + các phiên bản
+  const lineages = new Map<string, typeof sessions>();
+  for (const s of sessions) lineages.set(s.lineageId, [...(lineages.get(s.lineageId) ?? []), s]);
+  const groupSets = [...lineages.values()].map((vs) => {
+    const sorted = [...vs].sort((a, b) => b.version - a.version);
+    return { current: sorted.find((v) => v.status === "CONFIRMED") ?? sorted[0], draft: sorted.find((v) => v.status === "DRAFT") ?? null, versions: sorted };
+  });
+  return { cls, students, withTraits, sheets, groupSets, lessons, logs };
 }
-export type ClassProgress = NonNullable<Awaited<ReturnType<typeof getClassProgress>>>;
+export type ClassWorkspace = NonNullable<Awaited<ReturnType<typeof getClassWorkspace>>>;

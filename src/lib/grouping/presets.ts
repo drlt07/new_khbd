@@ -1,41 +1,44 @@
-import type { GroupSpec } from "./match";
+export type GroupDraft = {
+  name: string;
+  description: string;
+  keywords: string[];
+  scoreMin: number | null;
+  scoreMax: number | null;
+  forSupport: boolean;
+  maxSize: number | null;
+};
 
-export type GroupDraft = GroupSpec & { profile: string };
+const g = (name: string, description: string, extra: Partial<GroupDraft> = {}): GroupDraft => ({ name, description, keywords: [], scoreMin: null, scoreMax: null, forSupport: false, maxSize: null, ...extra });
 
-/** Bộ đặc trưng nhóm mẫu để GV bắt đầu nhanh — có thể sửa toàn bộ. */
+/** Bộ mô tả nhóm mẫu — GV sửa tự do; hệ thống diễn giải mô tả thành tiêu chí */
 export const GROUP_PRESETS: { id: string; label: string; description: string; groups: GroupDraft[] }[] = [
   {
-    id: "ngu-van",
-    label: "Thiên hướng Ngữ văn",
-    description: "Cảm thụ – sáng tạo, phân tích – lập luận, trình bày – truyền thông, và nhóm củng cố nền tảng.",
+    id: "nang-luc", label: "Theo năng lực (4 mức)", description: "Tốt – khá – trung bình – cần củng cố; dùng điểm số kết hợp đặc trưng.",
     groups: [
-      { name: "Cảm thụ – Sáng tạo", profile: "Nhạy cảm với hình ảnh, cảm xúc; thích viết, tưởng tượng, sáng tác, nhập vai.", keywords: ["Viết sáng tạo", "Sáng tác", "Tưởng tượng", "Văn học", "Sân khấu", "Diễn xuất", "Hội họa", "Âm nhạc"], scoreMin: null, scoreMax: null, forSupport: false },
-      { name: "Phân tích – Lập luận", profile: "Mạnh về đọc hiểu, phân tích, so sánh, lập luận có cấu trúc.", keywords: ["Phân tích", "Đọc hiểu", "Tư duy logic", "Lập luận", "Tranh biện", "Khoa học"], scoreMin: null, scoreMax: null, forSupport: false },
-      { name: "Trình bày – Truyền thông", profile: "Tự tin giao tiếp, thuyết trình, làm video, tổ chức hoạt động.", keywords: ["Thuyết trình", "Làm video", "Tổ chức nhóm", "Giao tiếp", "Hoạt động xã hội", "Hợp tác"], scoreMin: null, scoreMax: null, forSupport: false },
-      { name: "Củng cố nền tảng", profile: "Cần hướng dẫn từng bước, thêm thời gian và học liệu gợi ý để đạt yêu cầu cần đạt.", keywords: [], scoreMin: null, scoreMax: 6.5, forSupport: true },
+      g("Nhóm 1 – Nâng cao", "Học sinh có năng lực tốt, khả năng tự học cao."),
+      g("Nhóm 2 – Vận dụng", "Học sinh khá, có khả năng vận dụng kiến thức."),
+      g("Nhóm 3 – Có hướng dẫn", "Học sinh trung bình, cần hướng dẫn."),
+      g("Nhóm 4 – Củng cố", "Học sinh cần hỗ trợ củng cố kiến thức nền."),
     ],
   },
   {
-    id: "du-an",
-    label: "Vai trò trong dự án",
-    description: "Mỗi nhóm đảm nhận một mảng của sản phẩm: nội dung, thiết kế, kỹ thuật, truyền thông.",
+    id: "ngu-van", label: "Thiên hướng Ngữ văn", description: "Cảm thụ – sáng tạo, phân tích – lập luận, trình bày, củng cố nền tảng.",
     groups: [
-      { name: "Nội dung", profile: "Xây dựng ý tưởng, kịch bản, lời dẫn cho sản phẩm.", keywords: ["Viết sáng tạo", "Văn học", "Đọc hiểu", "Phân tích"], scoreMin: null, scoreMax: null, forSupport: false },
-      { name: "Thiết kế", profile: "Thiết kế hình ảnh, poster, infographic, bố cục sản phẩm.", keywords: ["Vẽ", "Thiết kế", "Thiết kế đồ họa", "Hội họa", "Tưởng tượng"], scoreMin: null, scoreMax: null, forSupport: false },
-      { name: "Kỹ thuật", profile: "Lập trình, dựng video, xử lý kỹ thuật và kiểm thử sản phẩm.", keywords: ["Lập trình", "Tư duy logic", "Làm video", "Khoa học", "Giải quyết vấn đề"], scoreMin: null, scoreMax: null, forSupport: false },
-      { name: "Truyền thông", profile: "Thuyết trình, giới thiệu sản phẩm, điều phối nhóm.", keywords: ["Thuyết trình", "Tổ chức nhóm", "Diễn xuất", "Hoạt động xã hội", "Giao tiếp"], scoreMin: null, scoreMax: null, forSupport: false },
+      g("Cảm thụ – Sáng tạo", "Học sinh thích viết sáng tạo, tưởng tượng, nhập vai; nhạy cảm với hình ảnh, cảm xúc.", { keywords: ["Viết sáng tạo", "Sáng tác", "Tưởng tượng", "Văn học", "Sân khấu", "Hội họa", "Âm nhạc"] }),
+      g("Phân tích – Lập luận", "Học sinh mạnh về đọc hiểu, phân tích, lập luận có cấu trúc.", { keywords: ["Phân tích", "Đọc hiểu", "Tư duy logic", "Khoa học"] }),
+      g("Trình bày – Truyền thông", "Học sinh tự tin thuyết trình, làm video, tổ chức hoạt động nhóm.", { keywords: ["Thuyết trình", "Làm video", "Tổ chức nhóm", "Hoạt động xã hội", "Hợp tác"] }),
+      g("Củng cố nền tảng", "Học sinh cần hỗ trợ củng cố kiến thức nền, hướng dẫn từng bước."),
     ],
   },
   {
-    id: "muc-diem",
-    label: "Theo mức đáp ứng (bảng điểm)",
-    description: "Ba nhóm theo khoảng điểm môn — cùng yêu cầu cần đạt, khác mức hỗ trợ và độ mở của nhiệm vụ.",
+    id: "du-an", label: "Vai trò trong dự án", description: "Nội dung, thiết kế, kỹ thuật, truyền thông — mỗi nhóm một mảng sản phẩm.",
     groups: [
-      { name: "Củng cố", profile: "Cần ôn kiến thức nền, phiếu có gợi ý từng bước và ví dụ mẫu.", keywords: [], scoreMin: null, scoreMax: 6.5, forSupport: true },
-      { name: "Phát triển", profile: "Nắm được kiến thức cơ bản, cần luyện vận dụng có định hướng.", keywords: [], scoreMin: 6.5, scoreMax: 8, forSupport: false },
-      { name: "Mở rộng", profile: "Đáp ứng tốt yêu cầu, sẵn sàng nhiệm vụ mở, sáng tạo, phản biện.", keywords: [], scoreMin: 8, scoreMax: null, forSupport: false },
+      g("Nội dung", "Học sinh viết tốt, đọc hiểu tốt; xây dựng ý tưởng, kịch bản.", { keywords: ["Viết sáng tạo", "Văn học", "Đọc hiểu", "Phân tích"] }),
+      g("Thiết kế", "Học sinh có năng khiếu vẽ, thiết kế, thẩm mỹ.", { keywords: ["Vẽ", "Thiết kế", "Thiết kế đồ họa", "Hội họa"] }),
+      g("Kỹ thuật", "Học sinh thích lập trình, công nghệ, làm video.", { keywords: ["Lập trình", "Tư duy logic", "Làm video", "Khoa học"] }),
+      g("Truyền thông", "Học sinh tự tin thuyết trình, điều phối nhóm.", { keywords: ["Thuyết trình", "Tổ chức nhóm", "Diễn xuất", "Hoạt động xã hội"] }),
     ],
   },
 ];
 
-export const emptyGroup = (i: number): GroupDraft => ({ name: `Nhóm ${i + 1}`, profile: "", keywords: [], scoreMin: null, scoreMax: null, forSupport: false });
+export const emptyGroup = (i: number): GroupDraft => g(`Nhóm ${i + 1}`, "");

@@ -24,6 +24,7 @@ export type GroupSpec = {
   scoreMin: number | null;
   scoreMax: number | null;
   forSupport: boolean;
+  maxSize?: number | null; // sĩ số tối đa (tùy chọn)
 };
 
 export type Assignment = { studentId: string; groupIndex: number; reason: string; fit: "good" | "partial" | "none" };
@@ -100,12 +101,20 @@ export function assignToGroups(students: MStudent[], groups: GroupSpec[], balanc
   // Thứ tự xếp: học sinh có lựa chọn rõ ràng nhất (chênh lệch giữa nhóm tốt nhất và nhì lớn) xếp trước,
   // để không bị nhóm khác "chiếm chỗ"; học sinh không có dữ liệu xếp sau cùng.
   const order = students.map((_, i) => i).sort((a, b) => regret(fits[b]) - regret(fits[a]) || a - b);
-  const cap = balanceSizes ? capacities(students.length, k) : Array(k).fill(Infinity);
+  const cap: number[] = balanceSizes ? capacities(students.length, k) : Array(k).fill(Infinity);
   // Nhóm nào có sức chứa lớn hơn được dành cho nhóm có nhiều học sinh phù hợp nhất
   if (balanceSizes) {
     const demand = groups.map((_, gi) => fits.filter((f) => bestIndex(f) === gi && f[gi].value > 0).length);
     const slots = [...cap].sort((a, b) => b - a);
     groups.map((_, gi) => gi).sort((a, b) => demand[b] - demand[a] || a - b).forEach((gi, rank) => (cap[gi] = slots[rank]));
+  }
+  // Sĩ số tối đa do GV đặt cho từng nhóm
+  groups.forEach((g, gi) => { if (g.maxSize && g.maxSize > 0) cap[gi] = Math.min(cap[gi], g.maxSize); });
+  // Nếu tổng sức chứa không đủ cho cả lớp, nới các nhóm không giới hạn trước (tránh học sinh bị bỏ sót)
+  const total = cap.reduce((a, b) => a + b, 0);
+  if (total < students.length) {
+    const free = groups.map((g, gi) => gi).filter((gi) => !groups[gi].maxSize);
+    (free.length ? free : groups.map((_, gi) => gi)).forEach((gi) => (cap[gi] = Infinity));
   }
   const size = Array(k).fill(0);
   const out: Assignment[] = [];

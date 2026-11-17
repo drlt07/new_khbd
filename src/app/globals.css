@@ -45,8 +45,11 @@
   --radius-lg: 0.625rem;
 }
 
-* {
-  border-color: var(--border);
+@layer base {
+  /* Trong layer base để các class màu viền (border-primary, border-transparent…) ghi đè được */
+  *, ::before, ::after {
+    border-color: var(--border);
+  }
 }
 
 body {

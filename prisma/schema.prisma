@@ -18,7 +18,9 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  classes Class[]
+  classes   Class[]
+  resources LearningResource[]
+  logs      ActivityLog[]
 }
 
 model Class {
@@ -30,10 +32,11 @@ model Class {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner       User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   students    Student[]
-  groupings   Grouping[]
+  groupings   GroupingSession[]
   scoreSheets ScoreSheet[]
+  logs        ActivityLog[]
 
   @@unique([ownerId, name, schoolYear])
 }
@@ -49,10 +52,10 @@ model Student {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  class        Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
-  traits       StudentTrait[]
-  memberships  GroupMember[]
-  scores       StudentScore[]
+  class       Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  traits      StudentTrait[]
+  memberships GroupMember[]
+  scores      StudentScore[]
 
   @@unique([classId, studentCode])
   @@index([classId])
@@ -61,7 +64,7 @@ model Student {
 enum TraitKind {
   INTEREST // Sở thích
   STRENGTH // Thế mạnh
-  NEED     // Cần hỗ trợ
+  NEED // Cần hỗ trợ
 }
 
 /// Một đặc điểm ngắn của học sinh, ví dụ: STRENGTH "Thuyết trình"
@@ -85,9 +88,9 @@ model ScoreSheet {
   fileName  String
   createdAt DateTime @default(now())
 
-  class   Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
-  columns ScoreColumn[]
-  groupings Grouping[]
+  class     Class             @relation(fields: [classId], references: [id], onDelete: Cascade)
+  columns   ScoreColumn[]
+  groupings GroupingSession[]
 }
 
 /// Một cột điểm trong bảng (TX1, Giữa kỳ, Cuối kỳ...)
@@ -114,86 +117,122 @@ model StudentScore {
   @@unique([columnId, studentId])
 }
 
-/// PHA 1 — Bộ nhóm của một lớp: GV đặt số nhóm và đặc trưng từng nhóm, hệ thống xếp học sinh.
-/// Một bộ nhóm được dùng lại cho nhiều KHBD ở Pha 2.
-model Grouping {
-  id           String   @id @default(cuid())
-  classId      String
-  title        String // ví dụ "Nhóm Ngữ văn – HK I"
-  subject      String?
-  scoreSheetId String? // bảng điểm dùng để xếp (nếu nhóm có khoảng điểm)
-  balanceSizes Boolean  @default(true) // giữ sĩ số các nhóm gần bằng nhau
-  isSample     Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+// ─────────────── PHA 1 — Phiên phân nhóm (có phiên bản) & Hồ sơ nhóm ───────────────
 
-  class       Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
-  scoreSheet  ScoreSheet?  @relation(fields: [scoreSheetId], references: [id], onDelete: SetNull)
-  groups      Group[]
-  lessonPlans LessonPlan[]
+enum SessionStatus {
+  DRAFT // đang thực hiện (bước 1–4)
+  CONFIRMED // GV đã duyệt — là nguồn dữ liệu cho Pha 2
+  SUPERSEDED // đã có phiên bản mới được duyệt thay thế
 }
 
-model Group {
-  id         String   @id @default(cuid())
-  groupingId String
-  name       String
-  profile    String? // đặc trưng nhóm do GV mô tả
-  keywords   String[] @default([]) // thế mạnh / sở thích phù hợp (dùng để xếp HS)
-  scoreMin   Float? // khoảng điểm phù hợp (tùy chọn)
-  scoreMax   Float?
-  forSupport Boolean  @default(false) // nhóm ưu tiên HS cần hỗ trợ
-  sortOrder  Int      @default(0)
+/// Một phiên phân nhóm. Các phiên bản của cùng một bộ nhóm chung lineageId.
+/// Sửa một phiên đã duyệt = tạo phiên bản mới; phiên cũ được giữ để KHBD cũ vẫn truy vết được.
+model GroupingSession {
+  id           String        @id @default(cuid())
+  classId      String
+  lineageId    String
+  version      Int           @default(1)
+  title        String
+  subject      String?
+  status       SessionStatus @default(DRAFT)
+  step         Int           @default(1) // bước xa nhất đã tới trong stepper (1–4)
+  scoreSheetId String?
+  balanceSizes Boolean       @default(false)
+  engine       String? // bộ máy đã phân nhóm: "rules-v1" | "claude:<model>"
+  analyzedAt   DateTime?
+  confirmedAt  DateTime?
+  isSample     Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
-  grouping Grouping      @relation(fields: [groupingId], references: [id], onDelete: Cascade)
-  members  GroupMember[]
-  tasks    GroupTask[]
+  class       Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  scoreSheet  ScoreSheet?    @relation(fields: [scoreSheetId], references: [id], onDelete: SetNull)
+  groups      GroupProfile[]
+  lessonPlans LessonPlan[]
+
+  @@index([classId, lineageId])
+  @@map("Grouping")
+}
+
+/// Hồ sơ nhóm học tập: tiêu chí GV đặt + đặc trưng tổng hợp sau khi duyệt.
+model GroupProfile {
+  id           String   @id @default(cuid())
+  sessionId    String   @map("groupingId")
+  slotKey      String // giữ nguyên qua các phiên bản để KHBD ánh xạ nhiệm vụ sang nhóm mới
+  name         String
+  description  String?  @map("profile") // GV mô tả mong muốn về nhóm
+  keywords     String[] @default([])
+  scoreMin     Float?
+  scoreMax     Float?
+  forSupport   Boolean  @default(false)
+  maxSize      Int?
+  criteria     Json? // tiêu chí hệ thống hiểu được từ mô tả + tiêu chí GV đặt (dùng khi phân nhóm)
+  // Hồ sơ tổng hợp (Pha 1 bước 4)
+  competency   String? // đặc trưng năng lực
+  strengths    String[] @default([])
+  difficulties String[] @default([])
+  needs        String? // nhu cầu học tập
+  supportGoal  String? // mục tiêu hỗ trợ
+  avgScore     Float?
+  sortOrder    Int      @default(0)
+
+  session GroupingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  members GroupMember[]
+  tasks   GroupTask[]
+
+  @@map("Group")
 }
 
 model GroupMember {
   id        String  @id @default(cuid())
   groupId   String
   studentId String
-  reason    String? // lý do xếp vào nhóm
+  reason    String?
+  fit       String? // good | partial | none | manual
 
-  group   Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  group   GroupProfile @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, studentId])
 }
 
-// ─────────────── PHA 2 — KHBD cá thể hóa theo nhóm ───────────────
+// ─────────────── PHA 2 — KHBD phân hóa theo nhóm ───────────────
 
 enum LessonStatus {
   DRAFT
+  REVIEW
   DONE
 }
 
 model LessonPlan {
   id              String       @id @default(cuid())
-  groupingId      String
+  sessionId       String       @map("groupingId") // phiên bản hồ sơ nhóm đang dùng
   subject         String
-  title           String // tên bài học
-  periods         Int          @default(1) // số tiết
-  requirements    String? // yêu cầu cần đạt (mỗi dòng một ý)
+  title           String
+  periods         Int          @default(1)
+  requirements    String?
+  content         String? // nội dung bài học
+  methods         String? // phương pháp, kĩ thuật dạy học
   knowledgeGoals  String?
   competencyGoals String?
   qualityGoals    String?
-  materials       String? // thiết bị dạy học và học liệu
-  assessment      String? // đánh giá
+  materials       String?
+  assessment      String?
+  engine          String?
   status          LessonStatus @default(DRAFT)
   isSample        Boolean      @default(false)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  grouping   Grouping         @relation(fields: [groupingId], references: [id], onDelete: Cascade)
+  session    GroupingSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   activities LessonActivity[]
 }
 
 enum ActivityPhase {
-  OPENING // Mở đầu
-  KNOWLEDGE // Hình thành kiến thức
-  PRACTICE // Luyện tập
-  APPLICATION // Vận dụng
+  OPENING
+  KNOWLEDGE
+  PRACTICE
+  APPLICATION
 }
 
 model LessonActivity {
@@ -205,25 +244,61 @@ model LessonActivity {
   goal         String?
   content      String?
   product      String?
-  organization String? // tổ chức thực hiện (4 bước)
-  byGroup      Boolean       @default(true) // hoạt động có giao nhiệm vụ theo nhóm
+  organization String?
+  byGroup      Boolean       @default(true)
   sortOrder    Int           @default(0)
 
   lessonPlan LessonPlan  @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
   tasks      GroupTask[]
 }
 
-/// Nhiệm vụ riêng của một nhóm trong một hoạt động
+/// Nhiệm vụ của một nhóm trong một hoạt động
 model GroupTask {
   id         String  @id @default(cuid())
   activityId String
   groupId    String
   task       String
   product    String?
-  support    String? // mức hỗ trợ / học liệu
+  support    String?
+  materials  String? // học liệu
+  challenge  String? // mức độ thử thách
+  assessment String? // đánh giá theo nhóm
 
   activity LessonActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  group    Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  group    GroupProfile   @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@unique([activityId, groupId])
+}
+
+// ─────────────── LIBRARY & lịch sử ───────────────
+
+model LearningResource {
+  id          String   @id @default(cuid())
+  ownerId     String
+  title       String
+  type        String // Phiếu học tập, Video, Bài đọc, Trình chiếu, Khác
+  subject     String?
+  url         String?
+  description String?
+  tags        String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+}
+
+/// Lịch sử hoạt động (kiểu Notion): ai làm gì, lúc nào, ở lớp nào
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  classId   String?
+  action    String
+  message   String
+  href      String?
+  createdAt DateTime @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class Class? @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

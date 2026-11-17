@@ -15,7 +15,7 @@ export function RegisterForm() {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(e.currentTarget));
     if (await submit(body)) {
-      router.replace("/groups");
+      router.replace("/dashboard");
       router.refresh();
     }
   }

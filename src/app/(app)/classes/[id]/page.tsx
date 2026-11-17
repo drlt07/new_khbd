@@ -1,69 +1,124 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Check } from "lucide-react";
+import { notFound } from "next/navigation";
+import { ArrowRight, BookOpenCheck, Check, History, Plus, Shuffle, Sheet, Users } from "lucide-react";
 import { requireUser } from "@/lib/auth/session";
-import { getClassProgress } from "@/server/services/class.service";
+import { getClassWorkspace } from "@/server/services/class.service";
+import { PageContainer } from "@/components/layout/page-container";
+import { PageHeader } from "@/components/layout/page-header";
+import { ClassFormButton } from "@/components/classes/class-form-dialog";
+import { DeleteClassButton } from "@/components/classes/class-actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SampleBadge } from "@/components/ui/badge";
+import { LessonStatus, SessionStatus, timeAgo } from "@/components/common/status";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = { title: "Tổng quan lớp" };
+export const metadata: Metadata = { title: "Lớp học" };
 
-type Step = { title: string; detail: string; done: boolean; optional?: boolean; href: string; cta: string };
-
-function StepList({ steps }: { steps: Step[] }) {
-  const next = steps.findIndex((s) => !s.done && !s.optional);
+function Section({ icon: Icon, title, action, children }: { icon: typeof Users; title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <ol className="divide-y">
-      {steps.map((s, i) => (
-        <li key={s.title} className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0">
-          <span className={cn("mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-            s.done ? "bg-success text-white" : i === next ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
-            {s.done ? <Check className="size-3.5" /> : i + 1}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="font-medium">{s.title}{s.optional && <span className="ml-1.5 text-xs font-normal text-muted-foreground">(không bắt buộc)</span>}</p>
-            <p className="text-sm text-muted-foreground">{s.detail}</p>
-          </div>
-          <Button asChild size="sm" variant={i === next ? "default" : "outline"} className="shrink-0">
-            <Link href={s.href}>{s.cta}{i === next && <ArrowRight />}</Link>
-          </Button>
-        </li>
-      ))}
-    </ol>
+    <section className="space-y-2">
+      <div className="flex items-center justify-between"><h2 className="flex items-center gap-2 font-semibold"><Icon className="size-4 text-muted-foreground" />{title}</h2>{action}</div>
+      {children}
+    </section>
   );
 }
 
-export default async function ClassOverview({ params }: { params: Promise<{ id: string }> }) {
+export default async function ClassWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireUser();
   const { id } = await params;
-  const p = (await getClassProgress(session.userId, id))!;
-  const base = `/classes/${id}`;
-
-  const phase1: Step[] = [
-    { title: "Danh sách học sinh & đặc trưng", detail: p.students ? `${p.students} học sinh · ${p.withTraits} em đã có sở thích / thế mạnh / nhu cầu hỗ trợ` : "Nhập danh sách lớp từ Excel, kèm sở thích, thế mạnh, cần hỗ trợ", done: p.students > 0 && p.withTraits > 0, href: `${base}/students`, cta: p.students ? "Xem / cập nhật" : "Nhập học sinh" },
-    { title: "Tải bảng điểm", detail: p.sheets ? `Đã tải ${p.sheets} bảng điểm` : "Dùng khi nhóm có đặc trưng theo khoảng điểm (vnEdu, SMAS hoặc tự lập)", done: p.sheets > 0, optional: true, href: `${base}/scores`, cta: p.sheets ? "Xem bảng điểm" : "Tải bảng điểm" },
-    { title: "Định nghĩa nhóm & xếp học sinh", detail: p.latestGrouping ? `Bộ nhóm gần nhất: ${p.latestGrouping.title} (${p.latestGrouping._count.groups} nhóm)` : "Đặt số nhóm và đặc trưng từng nhóm — hệ thống xếp học sinh, thầy cô chỉnh lại", done: p.groupings > 0, href: p.latestGrouping ? `${base}/groups/${p.latestGrouping.id}` : `${base}/groups/new`, cta: p.groupings ? "Mở bộ nhóm" : "Tạo bộ nhóm" },
+  const w = await getClassWorkspace(session.userId, id);
+  if (!w) notFound();
+  const confirmed = w.groupSets.some((g) => g.current.status === "CONFIRMED");
+  const flow = [
+    { label: "Dữ liệu học sinh", done: w.students > 0 && w.withTraits > 0, href: `/students?classId=${id}` },
+    { label: "Phân tích & phân nhóm", done: confirmed, doing: w.groupSets.length > 0, href: w.groupSets[0] ? `/phase1/${(w.groupSets[0].draft ?? w.groupSets[0].current).id}` : `/phase1/new?classId=${id}` },
+    { label: "Thiết kế KHBD", done: w.lessons.some((l) => l.status === "DONE"), doing: w.lessons.length > 0, href: confirmed ? `/phase2/new?classId=${id}` : "#", locked: !confirmed },
   ];
-  const phase2: Step[] = [
-    { title: "Soạn KHBD theo nhóm", detail: p.latestLesson ? `KHBD gần nhất: ${p.latestLesson.title}` : "Mỗi hoạt động có nhiệm vụ riêng cho từng nhóm, theo đặc trưng nhóm ở Pha 1", done: p.lessons > 0, href: p.groupings ? `${base}/lessons/new` : `${base}/groups/new`, cta: p.groupings ? "Soạn KHBD mới" : "Cần chia nhóm trước" },
-    { title: "Chỉnh sửa & xuất Word", detail: "Sửa nội dung, nhiệm vụ từng nhóm rồi tải file Word để nộp / in", done: false, optional: true, href: p.latestLesson ? `${base}/lessons/${p.latestLesson.id}` : `${base}/lessons`, cta: "Mở KHBD" },
-  ];
-
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Card className="p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-info">Pha 1</p>
-        <h2 className="mb-1 text-lg font-semibold">Dữ liệu học sinh → Chia nhóm</h2>
-        <p className="mb-4 text-sm text-muted-foreground">Đẩy đặc trưng và điểm của học sinh lên, đặt các nhóm cố định theo đặc trưng thầy cô mong muốn.</p>
-        <StepList steps={phase1} />
+    <PageContainer className="max-w-6xl">
+      <PageHeader crumbs={[{ label: "Lớp học của tôi", href: "/classes" }, { label: `Lớp ${w.cls.name}` }]}
+        title={<span className="flex items-center gap-2">Lớp {w.cls.name} {w.cls.isSample && <SampleBadge />}</span>}
+        description={`Năm học ${w.cls.schoolYear} · ${w.students} học sinh`}
+        actions={<><ClassFormButton initial={{ id: w.cls.id, name: w.cls.name, schoolYear: w.cls.schoolYear }} /><DeleteClassButton id={w.cls.id} name={w.cls.name} /></>} />
+
+      {/* Quy trình dạy học của lớp */}
+      <Card className="mb-6 p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quy trình dạy học của lớp</p>
+        <ol className="grid gap-2 sm:grid-cols-3">
+          {flow.map((f, i) => (
+            <li key={f.label}>
+              <Link href={f.href} aria-disabled={f.locked} className={cn("flex items-center gap-3 rounded-lg border p-3 transition-colors", f.locked ? "pointer-events-none opacity-50" : "hover:border-primary/40")}>
+                <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold", f.done ? "bg-success text-white" : f.doing ? "bg-primary text-white" : "bg-muted text-muted-foreground")}>{f.done ? <Check className="size-4" /> : i + 1}</span>
+                <span className="min-w-0"><span className="block text-sm font-medium">{f.label}</span>
+                  <span className="text-xs text-muted-foreground">{f.done ? "Hoàn thành" : f.locked ? "Cần hồ sơ nhóm đã duyệt" : f.doing ? "Đang thực hiện" : "Chưa bắt đầu"}</span></span>
+              </Link>
+            </li>
+          ))}
+        </ol>
       </Card>
-      <Card className={cn("p-5", !p.groupings && "opacity-70")}>
-        <p className="text-xs font-semibold uppercase tracking-wide text-success">Pha 2</p>
-        <h2 className="mb-1 text-lg font-semibold">Soạn KHBD cá thể hóa từ các nhóm</h2>
-        <p className="mb-4 text-sm text-muted-foreground">{p.groupings ? "Chọn bộ nhóm đã chia, hệ thống gợi ý nhiệm vụ phù hợp cho từng nhóm trong mỗi hoạt động." : "Hoàn thành Pha 1 (có ít nhất một bộ nhóm) để bắt đầu soạn KHBD."}</p>
-        <StepList steps={phase2} />
-      </Card>
-    </div>
+
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <div className="min-w-0 space-y-8 lg:col-span-2">
+          <Section icon={Users} title="Dữ liệu học sinh" action={<Button asChild size="sm" variant="outline"><Link href={`/students?classId=${id}`}>Quản lý dữ liệu</Link></Button>}>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Card className="p-3"><p className="text-xs text-muted-foreground">Học sinh</p><p className="text-lg font-semibold">{w.students}</p></Card>
+              <Card className="p-3"><p className="text-xs text-muted-foreground">Có đặc trưng</p><p className="text-lg font-semibold">{w.withTraits}/{w.students}</p></Card>
+              <Card className="p-3"><p className="text-xs text-muted-foreground">Bảng điểm</p><p className="flex items-center gap-1 text-lg font-semibold"><Sheet className="size-4" />{w.sheets.length}</p></Card>
+            </div>
+          </Section>
+
+          <Section icon={Shuffle} title="Hồ sơ nhóm (Pha 1)" action={<Button asChild size="sm" variant="outline"><Link href={`/phase1/new?classId=${id}`}><Plus /> Phiên phân nhóm mới</Link></Button>}>
+            {w.groupSets.length ? (
+              <Card className="divide-y">
+                {w.groupSets.map((g) => (
+                  <div key={g.current.lineageId} className="space-y-2 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link href={`/phase1/${g.current.id}`} className="font-medium hover:underline">{g.current.title}</Link>
+                      <SessionStatus status={g.current.status} version={g.current.version} />
+                      {g.draft && g.draft.id !== g.current.id && <Link href={`/phase1/${g.draft.id}`}><SessionStatus status="DRAFT" version={g.draft.version} /></Link>}
+                      <span className="ml-auto text-xs text-muted-foreground">{g.current._count.lessonPlans} KHBD · {timeAgo(g.current.updatedAt)}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">{g.current.groups.map((x) => <span key={x.name} className="rounded-full bg-muted px-2 py-0.5 text-xs">{x.name} · {x._count.members}</span>)}</div>
+                    {g.versions.length > 1 && <p className="text-xs text-muted-foreground">Lịch sử phiên bản: {g.versions.map((v) => <Link key={v.id} href={`/phase1/${v.id}`} className="mr-2 hover:underline">v{v.version}</Link>)}</p>}
+                  </div>
+                ))}
+              </Card>
+            ) : <Card className="p-4 text-sm text-muted-foreground">Chưa có phiên phân nhóm nào.</Card>}
+          </Section>
+
+          <Section icon={BookOpenCheck} title="Kế hoạch bài dạy (Pha 2)" action={confirmed && <Button asChild size="sm" variant="outline"><Link href={`/phase2/new?classId=${id}`}><Plus /> KHBD mới</Link></Button>}>
+            {w.lessons.length ? (
+              <Card className="divide-y">
+                {w.lessons.map((l) => (
+                  <Link key={l.id} href={`/phase2/${l.id}`} className="flex flex-wrap items-center gap-2 p-3 hover:bg-muted/40">
+                    <span className="min-w-0 flex-1"><span className="block truncate font-medium">{l.title}</span><span className="text-xs text-muted-foreground">{l.subject} · hồ sơ nhóm “{l.session.title}” v{l.session.version}</span></span>
+                    <LessonStatus status={l.status} outdated={l.session.status === "SUPERSEDED"} />
+                    <ArrowRight className="size-4 text-muted-foreground" />
+                  </Link>
+                ))}
+              </Card>
+            ) : <Card className="p-4 text-sm text-muted-foreground">{confirmed ? "Chưa có KHBD." : "Cần duyệt hồ sơ nhóm ở Pha 1 trước khi thiết kế KHBD."}</Card>}
+          </Section>
+        </div>
+
+        <Section icon={History} title="Lịch sử chỉnh sửa">
+          <Card className="p-4">
+            {w.logs.length ? (
+              <ol className="space-y-3 border-l pl-4">
+                {w.logs.map((l) => (
+                  <li key={l.id} className="relative">
+                    <span className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-slate-300" />
+                    {l.href ? <Link href={l.href} className="text-sm hover:underline">{l.message}</Link> : <p className="text-sm">{l.message}</p>}
+                    <p className="text-[11px] text-muted-foreground">{timeAgo(l.createdAt)}</p>
+                  </li>
+                ))}
+              </ol>
+            ) : <p className="text-sm text-muted-foreground">Chưa có hoạt động.</p>}
+          </Card>
+        </Section>
+      </div>
+    </PageContainer>
   );
 }
